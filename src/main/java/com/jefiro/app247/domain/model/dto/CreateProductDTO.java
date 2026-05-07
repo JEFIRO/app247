@@ -2,6 +2,8 @@ package com.jefiro.app247.domain.model.dto;
 
 import jakarta.validation.constraints.*;
 
+import java.math.BigDecimal;
+
 public record CreateProductDTO(
 
         @NotBlank(message = "O código do produto é obrigatório.")
@@ -12,7 +14,7 @@ public record CreateProductDTO(
 
         @NotNull(message = "O preço deve ser informado.")
         @Positive(message = "O preço deve ser maior que zero.")
-        Double preco,
+        BigDecimal preco,
 
         @NotNull(message = "A quantidade em estoque é obrigatória.")
         @Min(value = 0, message = "A quantidade não pode ser negativa.")
@@ -30,10 +32,10 @@ public record CreateProductDTO(
 
         @NotNull(message = "O peso do produto é obrigatório.")
         @Positive(message = "O peso deve ser maior que zero.")
-        Double peso,
+        BigDecimal peso,
 
         @NotNull(message = "A tolerância de peso deve ser informada.")
         @PositiveOrZero(message = "A tolerância de peso não pode ser negativa.")
-        Double pesoTolerancia
+        BigDecimal pesoTolerancia
 
 ) {}

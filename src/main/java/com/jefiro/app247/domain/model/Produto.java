@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Getter
@@ -23,14 +24,14 @@ public class Produto {
     private Long id;
     private String codigo;
     private String nome;
-    private double preco;
-    private int quantidade;
+    private BigDecimal preco;
+    private Integer quantidade;
     private String unidadeMedida;
     private String categoria;
     private String descricao;
     private String foto;
-    private double peso;
-    private double pesoTolerancia;
+    private BigDecimal peso;
+    private BigDecimal pesoTolerancia;
     private LocalDateTime create_at;
     private LocalDateTime update_at;
     private boolean status;

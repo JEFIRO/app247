@@ -32,4 +32,9 @@ public class ProdutoService {
     public Produto buscarPorCodigo(String codigo) {
         return produtoRepository.findByCodigo(codigo);
     }
+
+    public Produto buscarPorId(Long id) {
+        return produtoRepository.findById(id).orElseThrow(() -> new RuntimeException("Produto não existe"));
+    }
+
 }
