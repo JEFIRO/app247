@@ -2,6 +2,8 @@ package com.jefiro.app247.domain.model;
 
 
 import com.jefiro.app247.domain.model.dto.CreateProductDTO;
+import com.jefiro.app247.domain.model.enum_type.ProdutoCategoria;
+import com.jefiro.app247.domain.model.enum_type.UnidadeMedida;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -22,18 +24,21 @@ public class Produto {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @Column(unique = true)
     private String codigo;
     private String nome;
     private BigDecimal preco;
     private Integer quantidade;
-    private String unidadeMedida;
-    private String categoria;
+    @Enumerated(EnumType.STRING)
+    private UnidadeMedida unidadeMedida;
+    @Enumerated(EnumType.STRING)
+    private ProdutoCategoria categoria;
     private String descricao;
     private String foto;
     private BigDecimal peso;
     private BigDecimal pesoTolerancia;
-    private LocalDateTime create_at;
-    private LocalDateTime update_at;
+    private LocalDateTime createAt;
+    private LocalDateTime updateAt;
     private boolean status;
 
     public Produto(CreateProductDTO produtoDTO) {
@@ -41,11 +46,14 @@ public class Produto {
         this.nome = produtoDTO.nome();
         this.preco = produtoDTO.preco();
         this.quantidade = produtoDTO.quantidade();
-        this.unidadeMedida = produtoDTO.unidadeMedida();
-        this.categoria = produtoDTO.categoria();
+        this.unidadeMedida = UnidadeMedida.valueOf(produtoDTO.unidadeMedida());
+        this.categoria = ProdutoCategoria.valueOf(produtoDTO.categoria());
         this.descricao = produtoDTO.descricao();
         this.foto = produtoDTO.foto();
         this.peso = produtoDTO.peso();
         this.pesoTolerancia = produtoDTO.pesoTolerancia();
+        this.createAt = LocalDateTime.now();
+        this.updateAt = LocalDateTime.now();
+        this.status = true;
     }
 }

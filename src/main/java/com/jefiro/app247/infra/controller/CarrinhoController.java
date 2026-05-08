@@ -2,6 +2,7 @@ package com.jefiro.app247.infra.controller;
 
 import com.jefiro.app247.domain.model.Carrinho;
 import com.jefiro.app247.domain.model.dto.CarrinhoRequest;
+import com.jefiro.app247.domain.model.dto.response.CarrinhoResponseDTO;
 import com.jefiro.app247.infra.service.CarrinhoService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +22,7 @@ public class CarrinhoController {
 
     @PostMapping
     public ResponseEntity<?> addCarinho(@RequestBody @Valid CarrinhoRequest request) {
-        return ResponseEntity.ok(service.save(request));
+        return ResponseEntity.ok(new CarrinhoResponseDTO(service.save(request)));
     }
 
 }

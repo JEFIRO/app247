@@ -1,0 +1,30 @@
+package com.jefiro.app247.domain.model.enum_type;
+
+public enum ProdutoCategoria {
+    BEBIDA,
+    ALIMENTOS,
+    LIMPEZA,
+    HIGIENE,
+    PADARIA,
+    LATICINIOS,
+    CONGELADOS,
+    DOCES,
+    SALGADINHOS,
+    FRUTAS,
+    VERDURAS,
+    LEGUMES,
+    CARNES,
+    FRIOS,
+    PETISCOS,
+    TEMPEROS,
+    GRAOS,
+    MASSAS,
+    ENLATADOS,
+    MATINAIS,
+    UTILIDADES,
+    PET,
+    INFANTIL,
+    ELETRONICOS,
+    PAPELARIA,
+    DESCARTAVEIS
+}

@@ -1,5 +1,6 @@
 package com.jefiro.app247.domain.model;
 
+import com.jefiro.app247.domain.model.enum_type.ItemStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -25,7 +26,7 @@ public class Item {
     @JoinColumn(name = "carrinho_id")
     private Carrinho carrinho;
 
-    private Long productId;
+    private Long produtoId;
 
     private String barcode;
 
@@ -41,17 +42,20 @@ public class Item {
 
     private BigDecimal receivedWeight;
 
-    private String status;
+    @Enumerated(EnumType.STRING)
+    private ItemStatus status;
 
     public Item(Produto produto, Integer quantity,
                 BigDecimal receivedWeight) {
-        this.productId = produto.getId();
+        this.produtoId = produto.getId();
         this.barcode = produto.getCodigo();
         this.name = produto.getNome();
         this.unitPrice = produto.getPreco();
         this.expectedWeight = produto.getPeso();
         this.quantity = quantity;
         this.receivedWeight = receivedWeight;
+        this.status = ItemStatus.VALIDATED;
+        this.requiresWeight = true;
 
     }
 }
