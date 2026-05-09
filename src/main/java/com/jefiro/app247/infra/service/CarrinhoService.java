@@ -5,7 +5,6 @@ import com.jefiro.app247.domain.model.Item;
 import com.jefiro.app247.domain.model.Produto;
 import com.jefiro.app247.domain.model.dto.CarrinhoRequest;
 import com.jefiro.app247.domain.model.dto.ItemRequest;
-import com.jefiro.app247.domain.model.dto.response.CarrinhoResponseDTO;
 import com.jefiro.app247.infra.repository.CarrinhoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -19,6 +18,7 @@ public class CarrinhoService {
 
     @Autowired
     private CarrinhoRepository repository;
+
     @Autowired
     private ProdutoService produtoService;
 
@@ -48,4 +48,7 @@ public class CarrinhoService {
     }
 
 
+    public Carrinho getById(String id) {
+        return repository.findById(id).orElseThrow(() -> new RuntimeException("Carrinho não existe"));
+    }
 }
