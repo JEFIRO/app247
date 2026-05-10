@@ -46,8 +46,8 @@ public class Produto {
         this.nome = produtoDTO.nome();
         this.preco = produtoDTO.preco();
         this.quantidade = produtoDTO.quantidade();
-        this.unidadeMedida = UnidadeMedida.valueOf(produtoDTO.unidadeMedida());
-        this.categoria = ProdutoCategoria.valueOf(produtoDTO.categoria());
+        this.unidadeMedida = UnidadeMedida.valueOf(produtoDTO.unidadeMedida().toUpperCase());
+        this.categoria = ProdutoCategoria.valueOf(produtoDTO.categoria().toUpperCase());
         this.descricao = produtoDTO.descricao();
         this.foto = produtoDTO.foto();
         this.peso = produtoDTO.peso();

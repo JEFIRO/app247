@@ -8,19 +8,30 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 
 @Service
 public class ProdutoService {
 
     @Autowired
     private ProdutoRepository produtoRepository;
+    @Autowired
+    private FileStorageService fileStorageService;
 
-    public Produto salvar(CreateProductDTO produtoDTO) {
+    public Produto salvar(CreateProductDTO produtoDTO, MultipartFile file) throws IOException {
         if (produtoDTO == null) {
             return null;
         }
+        String urlImagem = null;
+
+        if (file != null && !file.isEmpty()) {
+            urlImagem = fileStorageService.salvarArquivo(file);
+        }
 
         Produto produto = new Produto(produtoDTO);
+        produto.setFoto(urlImagem);
         return produtoRepository.save(produto);
     }
 
