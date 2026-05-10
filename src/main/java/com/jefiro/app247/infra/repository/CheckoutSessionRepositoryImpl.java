@@ -5,6 +5,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.time.Duration;
+import java.util.Optional;
 
 @Repository
 public class CheckoutSessionRepositoryImpl implements CheckoutSessionRepository {
@@ -26,10 +27,14 @@ public class CheckoutSessionRepositoryImpl implements CheckoutSessionRepository 
     }
 
     @Override
-    public CheckoutSession findById(String id) {
-        return (CheckoutSession) redisTemplate.opsForValue().get(key(id));
-    }
+    public Optional<CheckoutSession> findById(String id) {
 
+        return Optional.ofNullable(
+                (CheckoutSession) redisTemplate
+                        .opsForValue()
+                        .get(key(id))
+        );
+    }
     @Override
     public void delete(String id) {
         redisTemplate.delete(key(id));

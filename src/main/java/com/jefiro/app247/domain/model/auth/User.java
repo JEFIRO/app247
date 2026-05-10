@@ -1,7 +1,10 @@
 package com.jefiro.app247.domain.model.auth;
 
 import com.jefiro.app247.domain.model.dto.UserRequestDTO;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
@@ -9,11 +12,18 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@AllArgsConstructor
+@NoArgsConstructor
+
+@Table(name = "users")
+@Entity
 
 public class User {
 
-    private String uuidUser;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long userId;
+    private String uuidUser;
 
     private String nome;
     private String sobrenome;
@@ -26,7 +36,6 @@ public class User {
 
     private LocalDate dataNascimento;
 
-    private Endereco endereco;
 
     private String fotoPerfil;
 

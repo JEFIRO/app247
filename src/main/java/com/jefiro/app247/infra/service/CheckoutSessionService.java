@@ -29,14 +29,14 @@ public class CheckoutSessionService {
         return session;
     }
 
-    public byte[] gerarQRCode(String session) throws Exception {
+    public byte[] gerarQRCode(String id) throws Exception {
 
-        if (repository.findById(session).getSessionId().isEmpty()) {
-            throw new Exception("session invalida");
-        }
+        CheckoutSession session = repository.findById(id)
+                .orElseThrow(() ->
+                        new RuntimeException("Sessão inválida"));
 
         QRCodeWriter qrCodeWriter = new QRCodeWriter();
-        BitMatrix bitMatrix = qrCodeWriter.encode("app24por7://session/" + session, BarcodeFormat.QR_CODE, 250, 250);
+        BitMatrix bitMatrix = qrCodeWriter.encode("app247://session/" + session.getSessionId(), BarcodeFormat.QR_CODE, 250, 250);
 
         ByteArrayOutputStream pngOutputStream = new ByteArrayOutputStream();
         MatrixToImageWriter.writeToStream(bitMatrix, "PNG", pngOutputStream);
@@ -46,7 +46,7 @@ public class CheckoutSessionService {
 
     public boolean setUser(String id, String session) {
         try {
-            CheckoutSession session1 = repository.findById(session);
+            CheckoutSession session1 = repository.findById(session).get();
             session1.setUserId(id);
             repository.save(session1);
             return true;

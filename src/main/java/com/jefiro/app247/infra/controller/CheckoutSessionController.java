@@ -28,8 +28,8 @@ public class CheckoutSessionController {
     }
 
     @GetMapping(value = "/qrcode", produces = MediaType.IMAGE_PNG_VALUE)
-    public ResponseEntity<byte[]> getQRCode(@RequestParam String conteudo) throws Exception {
-        return ResponseEntity.ok(service.gerarQRCode(conteudo));
+    public ResponseEntity<byte[]> getQRCode(@RequestParam String id) throws Exception {
+        return ResponseEntity.ok(service.gerarQRCode(id));
     }
 
     @GetMapping()

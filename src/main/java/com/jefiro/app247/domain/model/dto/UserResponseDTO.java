@@ -47,7 +47,7 @@ public record UserResponseDTO(
                 user.getCpf(),
                 user.getTelefone(),
                 user.getDataNascimento(),
-                user.getEndereco(),
+                new Endereco(),
                 user.getFotoPerfil(),
                 user.getAtivo(),
                 user.getEmailVerificado(),

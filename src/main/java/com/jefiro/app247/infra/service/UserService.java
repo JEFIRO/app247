@@ -8,14 +8,12 @@ import com.jefiro.app247.domain.model.dto.UserResponseDTO;
 import com.jefiro.app247.infra.repository.UserRepository;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
 public class UserService {
 
     private UserRepository repository;
-
 
     public UserResponseDTO saveUser(UserRequestDTO request) {
         User user = new User(request);
