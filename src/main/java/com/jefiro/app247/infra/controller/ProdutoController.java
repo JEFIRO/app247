@@ -61,4 +61,21 @@ public class ProdutoController {
     public ResponseEntity<Produto> buscarPorCodigo(@PathVariable String codigo) {
         return ResponseEntity.ok(produtoService.buscarPorCodigo(codigo));
     }
+
+    @GetMapping("/id")
+    public ResponseEntity<Produto> buscarPorCodigo(@RequestParam Long id) {
+        return ResponseEntity.ok(produtoService.buscarPorId(id));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Produto> atualizarProduto(
+            @PathVariable Long id,
+            @RequestPart("data") CreateProductDTO dto,
+            @RequestPart(value = "file", required = false) MultipartFile file
+    ) throws IOException {
+
+        Produto produtoAtualizado = produtoService.atualizar(id, dto, file);
+
+        return ResponseEntity.ok(produtoAtualizado);
+    }
 }
