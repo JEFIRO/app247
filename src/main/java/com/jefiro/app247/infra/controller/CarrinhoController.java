@@ -16,8 +16,9 @@ public class CarrinhoController {
     private CarrinhoService service;
 
     @GetMapping("/{id}")
-    public Carrinho getCarrinho(@PathVariable Long id) {
-        return null;
+    public ResponseEntity<?> getCarrinho(@PathVariable String id) {
+        return
+                ResponseEntity.ok(service.getById(id));
     }
 
     @PostMapping

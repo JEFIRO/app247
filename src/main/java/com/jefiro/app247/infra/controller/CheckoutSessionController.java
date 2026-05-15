@@ -20,11 +20,17 @@ public class CheckoutSessionController {
     @Autowired
     private CarrinhoService carrinhoService;
 
-    @GetMapping("/{id}")
-    public ResponseEntity<CheckoutSessionResponseDTO> getQrCode(@PathVariable String id) {
-        Carrinho carrinho = carrinhoService.getById(id);
+    @GetMapping(value = "/carrinho")
+    public ResponseEntity<CheckoutSessionResponseDTO> getQrCode(@RequestParam String idCarrinho) {
+        Carrinho carrinho = carrinhoService.getById(idCarrinho);
 
         return ResponseEntity.ok(new CheckoutSessionResponseDTO(service.create(carrinho)));
+    }
+
+    @GetMapping(value = "/session")
+    public ResponseEntity<?> getCarrinho(@RequestParam String idSession) {
+        System.out.println(idSession);
+        return ResponseEntity.ok(service.getCarrinho(idSession));
     }
 
     @GetMapping(value = "/qrcode", produces = MediaType.IMAGE_PNG_VALUE)

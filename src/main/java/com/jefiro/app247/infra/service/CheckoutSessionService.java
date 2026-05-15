@@ -6,7 +6,9 @@ import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import com.jefiro.app247.domain.model.Carrinho;
 import com.jefiro.app247.domain.model.dto.CheckoutSession;
+import com.jefiro.app247.domain.model.dto.response.CarrinhoResponseDTO;
 import com.jefiro.app247.infra.repository.CheckoutSessionRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -15,6 +17,8 @@ import java.io.ByteArrayOutputStream;
 public class CheckoutSessionService {
 
     private final CheckoutSessionRepository repository;
+    @Autowired
+    private CarrinhoService service;
 
     public CheckoutSessionService(CheckoutSessionRepository repository) {
         this.repository = repository;
@@ -27,6 +31,13 @@ public class CheckoutSessionService {
         repository.save(session);
 
         return session;
+    }
+
+    public CarrinhoResponseDTO getCarrinho(String sessionRequest) {
+        CheckoutSession session = repository.findById(sessionRequest).orElseThrow(() -> new RuntimeException("sessao expirada"));
+        Carrinho carrinho = service.getById(session.getCartId());
+
+        return new CarrinhoResponseDTO(carrinho);
     }
 
     public byte[] gerarQRCode(String id) throws Exception {
