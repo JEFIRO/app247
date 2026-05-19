@@ -31,6 +31,7 @@ public class Item {
     private String barcode;
 
     private String name;
+    private String foto;
 
     private BigDecimal unitPrice;
 
@@ -52,6 +53,7 @@ public class Item {
         this.name = produto.getNome();
         this.unitPrice = produto.getPreco();
         this.expectedWeight = produto.getPeso();
+        this.foto = produto.getFoto();
         this.quantity = quantity;
         this.receivedWeight = receivedWeight;
         this.status = ItemStatus.VALIDATED;

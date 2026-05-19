@@ -14,6 +14,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class ProdutoService {
@@ -112,4 +114,14 @@ public class ProdutoService {
         return produtoRepository.findById(id).orElseThrow(() -> new RuntimeException("Produto não existe"));
     }
 
+    public List<Produto> sync(String lastSync) {
+
+        try {
+            var data = LocalDateTime.parse(lastSync);
+            return produtoRepository.findAllByUpdateAtAfter(data);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+    }
 }

@@ -14,6 +14,7 @@ public record ItemResponseDTO(
         String barcode,
 
         String name,
+        String foto,
 
         BigDecimal unitPrice,
 
@@ -29,7 +30,7 @@ public record ItemResponseDTO(
 
 ) {
     public ItemResponseDTO(Item i) {
-        this(i.getItemId(), i.getProdutoId(), i.getBarcode(), i.getName(), i.getUnitPrice(), i.getQuantity(),
+        this(i.getItemId(), i.getProdutoId(), i.getBarcode(), i.getName(), i.getFoto(), i.getUnitPrice(), i.getQuantity(),
                 i.getRequiresWeight(), i.getExpectedWeight(), i.getReceivedWeight(), i.getStatus());
     }
 }

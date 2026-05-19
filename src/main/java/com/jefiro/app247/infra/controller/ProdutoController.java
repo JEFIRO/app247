@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -77,5 +78,10 @@ public class ProdutoController {
         Produto produtoAtualizado = produtoService.atualizar(id, dto, file);
 
         return ResponseEntity.ok(produtoAtualizado);
+    }
+
+    @GetMapping("/sync")
+    public List<Produto> sync(@RequestParam String lastSync) {
+        return produtoService.sync(lastSync);
     }
 }
