@@ -16,7 +16,7 @@ public class FileStorageService {
 
     public String salvarArquivo(MultipartFile file) throws IOException {
 
-        String nomeArquivo = UUID.randomUUID() + "_" + file.getOriginalFilename();
+        String nomeArquivo = UUID.randomUUID().toString();
 
         Path path = Paths.get(uploadDir + nomeArquivo);
 

@@ -1,7 +1,7 @@
 package com.jefiro.app247.infra.service;
 
 import com.jefiro.app247.domain.model.auth.User;
-import com.jefiro.app247.domain.model.dto.AuthResponse;
+import com.jefiro.app247.domain.model.dto.auth.AuthResponse;
 import com.jefiro.app247.domain.model.dto.LoginRequestDTO;
 import com.jefiro.app247.domain.model.dto.UserRequestDTO;
 import com.jefiro.app247.domain.model.dto.UserResponseDTO;

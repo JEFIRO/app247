@@ -6,9 +6,16 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.jspecify.annotations.Nullable;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -18,7 +25,7 @@ import java.time.LocalDateTime;
 @Table(name = "users")
 @Entity
 
-public class User {
+public class User implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -41,7 +48,7 @@ public class User {
 
     private Boolean ativo;
     private Boolean emailVerificado;
-
+    @Enumerated(EnumType.STRING)
     private RoleUser role;
 
     private LocalDateTime createdAt;
@@ -49,6 +56,7 @@ public class User {
     private LocalDateTime ultimoLogin;
 
     public User(UserRequestDTO response) {
+        this.uuidUser = UUID.randomUUID().toString();
         this.nome = response.nome();
         this.sobrenome = response.sobrenome();
         this.email = response.email();
@@ -61,5 +69,58 @@ public class User {
         this.role = RoleUser.USER;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+    }
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+
+        if (this.role == RoleUser.ADMIN) {
+            return List.of(
+                    new SimpleGrantedAuthority("ROLE_ADMIN"),
+                    new SimpleGrantedAuthority("ROLE_GERENTE"),
+                    new SimpleGrantedAuthority("ROLE_USER")
+            );
+        }
+
+        if (this.role == RoleUser.GERENTE) {
+            return List.of(
+                    new SimpleGrantedAuthority("ROLE_GERENTE"),
+                    new SimpleGrantedAuthority("ROLE_USER")
+            );
+        }
+
+        return List.of(
+                new SimpleGrantedAuthority("ROLE_USER")
+        );
+    }
+
+    @Override
+    public @Nullable String getPassword() {
+        return this.senha;
+    }
+
+    @Override
+    public String getUsername() {
+        return this.cpf;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return UserDetails.super.isAccountNonExpired();
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return UserDetails.super.isAccountNonLocked();
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return UserDetails.super.isCredentialsNonExpired();
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return UserDetails.super.isEnabled();
     }
 }
