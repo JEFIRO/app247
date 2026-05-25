@@ -16,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/produtos")
@@ -83,5 +84,15 @@ public class ProdutoController {
     @GetMapping("/sync")
     public List<Produto> sync(@RequestParam String lastSync) {
         return produtoService.sync(lastSync);
+    }
+
+    @GetMapping("/home")
+    public ResponseEntity<?> produtosHome() {
+
+        var destaques = produtoService.findTop10ByOrderByCreatedAtDesc();
+
+        return ResponseEntity.ok(Map.of(
+                "destaques", destaques
+        ));
     }
 }

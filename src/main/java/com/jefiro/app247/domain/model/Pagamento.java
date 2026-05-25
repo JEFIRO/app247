@@ -42,6 +42,12 @@ public class Pagamento {
 
     private LocalDateTime paidAt;
 
+    private LocalDateTime updatedAt;
+
+    private String paymentMethodId;
+
+    private String statusDetail;
+
     public Pagamento() {
         this.createdAt = LocalDateTime.now();
         this.status = PagamentoStatus.PENDING;

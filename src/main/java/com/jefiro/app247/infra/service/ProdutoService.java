@@ -124,4 +124,9 @@ public class ProdutoService {
         }
 
     }
+
+    public List<Produto> findTop10ByOrderByCreatedAtDesc() {
+        return produtoRepository.findTop10ByOrderByCreateAtDesc();
+
+    }
 }

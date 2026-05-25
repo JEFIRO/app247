@@ -5,6 +5,7 @@ import com.jefiro.app247.domain.model.dto.CarrinhoRequest;
 import com.jefiro.app247.domain.model.dto.response.CarrinhoResponseDTO;
 import com.jefiro.app247.infra.service.CarrinhoService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -25,5 +26,10 @@ public class CarrinhoController {
     public ResponseEntity<?> addCarinho(@RequestBody @Valid CarrinhoRequest request) {
         return ResponseEntity.ok(new CarrinhoResponseDTO(service.save(request)));
     }
+
+//    @PostMapping
+//    public ResponseEntity<?> addCarinho(@RequestBody @Valid CarrinhoRequest request, @RequestParam @Valid @NotBlank String metodo) {
+//        return ResponseEntity.ok(new CarrinhoResponseDTO(service.save(request,metodo)));
+//    }
 
 }

@@ -1,5 +1,6 @@
 package com.jefiro.app247.domain.model.auth;
 
+import com.jefiro.app247.domain.model.Order;
 import com.jefiro.app247.domain.model.dto.UserRequestDTO;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -42,7 +43,8 @@ public class User implements UserDetails {
     private String telefone;
 
     private LocalDate dataNascimento;
-
+    @OneToMany(mappedBy = "user")
+    private List<Order> orders;
 
     private String fotoPerfil;
 

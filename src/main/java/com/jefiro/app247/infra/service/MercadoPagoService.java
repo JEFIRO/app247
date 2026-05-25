@@ -1,0 +1,238 @@
+package com.jefiro.app247.infra.service;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jefiro.app247.domain.model.Item;
+import com.jefiro.app247.domain.model.Order;
+import com.jefiro.app247.domain.model.Pagamento;
+import com.jefiro.app247.domain.model.dto.PagamentoResponse;
+import com.jefiro.app247.domain.model.enum_type.PagamentoStatus;
+import com.jefiro.app247.domain.model.enum_type.PagamentoTipo;
+import com.jefiro.app247.infra.repository.PagamentoRepository;
+import com.mercadopago.MercadoPagoConfig;
+import com.mercadopago.client.common.IdentificationRequest;
+import com.mercadopago.client.payment.PaymentClient;
+import com.mercadopago.client.payment.PaymentCreateRequest;
+import com.mercadopago.client.payment.PaymentPayerRequest;
+import com.mercadopago.client.preference.*;
+import com.mercadopago.exceptions.MPApiException;
+import com.mercadopago.exceptions.MPException;
+import com.mercadopago.resources.payment.Payment;
+import com.mercadopago.resources.preference.Preference;
+import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+@Service
+public class MercadoPagoService {
+
+    @Autowired
+    private PagamentoRepository pagamentoRepository;
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    @Value("${api.mercado.pago.access.token}")
+    private String accessToken;
+
+    @PostConstruct
+    public void init() {
+        MercadoPagoConfig.setAccessToken(accessToken);
+    }
+
+    public PagamentoResponse criarPix(Order order) {
+
+        try {
+
+            PaymentClient client = new PaymentClient();
+
+            PaymentCreateRequest request =
+                    PaymentCreateRequest.builder()
+                            .transactionAmount(
+                                    order.getTotal()
+                            )
+                            .description("Pedido " + order.getOrderId())
+                            .paymentMethodId("pix")
+                            //.notificationUrl("https:// https://tayna-fitful-mariko.ngrok-free.dev/webhook/mercadopago")
+                            .payer(
+                                    PaymentPayerRequest.builder()
+                                            .email("teste@test.com")
+                                            .build()
+                            )
+                            .build();
+
+            Payment payment = client.create(request);
+
+            Pagamento pagamento = new Pagamento();
+
+            pagamento.setOrder(order);
+            pagamento.setValor(order.getTotal());
+            pagamento.setTipo(PagamentoTipo.PIX);
+            pagamento.setTransactionId(payment.getId().toString());
+
+            pagamento.setStatus(PagamentoStatus.PENDING);
+
+            pagamentoRepository.save(pagamento);
+
+            String qrCode = null;
+            String qrCodeBase64 = null;
+
+            if (payment.getPointOfInteraction() != null &&
+                    payment.getPointOfInteraction().getTransactionData() != null) {
+
+                qrCode = payment.getPointOfInteraction()
+                        .getTransactionData()
+                        .getQrCode();
+
+                qrCodeBase64 = payment.getPointOfInteraction()
+                        .getTransactionData()
+                        .getQrCodeBase64();
+            }
+
+            return new PagamentoResponse(
+                    pagamento.getPagamentoId(),
+                    order.getOrderId(),
+                    pagamento.getValor(),
+                    pagamento.getTipo(),
+                    pagamento.getStatus(),
+                    pagamento.getTransactionId(),
+                    qrCode,
+                    qrCodeBase64
+            );
+
+        } catch (MPApiException ex) {
+
+            System.out.println("STATUS: " + ex.getApiResponse().getStatusCode());
+            System.out.println("CONTENT: " + ex.getApiResponse().getContent());
+
+            throw new RuntimeException(ex);
+
+        } catch (MPException ex) {
+
+            ex.printStackTrace();
+
+            throw new RuntimeException(ex);
+        }
+    }
+
+
+    public Map<String, Object> criarCheckout(Order order) throws Exception {
+
+        List<PreferenceItemRequest> items = new ArrayList<>();
+
+        for (Item item : order.getCarrinho().getItems()) {
+            PreferenceItemRequest preferenceItem =
+                    PreferenceItemRequest.builder()
+                            .title(item.getName())
+                            .quantity(item.getQuantity())
+                            .unitPrice(item.getUnitPrice())
+                            .currencyId("BRL")
+                            .build();
+
+            items.add(preferenceItem);
+        }
+
+        PreferenceBackUrlsRequest backUrls =
+                PreferenceBackUrlsRequest.builder()
+                        .success("meuapp://success")
+                        .pending("meuapp://pending")
+                        .failure("meuapp://failure")
+                        .build();
+
+        PreferencePaymentMethodsRequest paymentMethods =
+                PreferencePaymentMethodsRequest.builder()
+                        .excludedPaymentMethods(new ArrayList<>())
+                        .excludedPaymentTypes(new ArrayList<>())
+                        .installments(12)
+                        .build();
+
+        PreferenceRequest request =
+                PreferenceRequest.builder()
+                        .items(items)
+                        .externalReference(order.getOrderId())
+                        .backUrls(backUrls)
+                        .autoReturn("approved")
+                        .paymentMethods(paymentMethods)
+                        .build();
+
+        PreferenceClient client = new PreferenceClient();
+
+        Preference preference = client.create(request);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("init_point", preference.getInitPoint());
+        response.put("id", preference.getId());
+        System.out.println(response);
+        return response;
+    }
+
+
+    public void atualizarPagamento(String paymentId) {
+
+        try {
+            PaymentClient client = new PaymentClient();
+            Payment payment = client.get(Long.parseLong(paymentId));
+
+            Pagamento pagamento = pagamentoRepository
+                    .findByTransactionId(paymentId)
+                    .orElseThrow(() -> new RuntimeException("Pagamento não encontrado"));
+
+            if (pagamento.getStatus() == PagamentoStatus.APPROVED) {
+                return;
+            }
+
+            String status = payment.getStatus();
+
+            PagamentoStatus novoStatus = switch (status) {
+                case "approved" -> PagamentoStatus.APPROVED;
+                case "rejected" -> PagamentoStatus.DENIED;
+                case "cancelled" -> PagamentoStatus.CANCELLED;
+                case "in_process" -> PagamentoStatus.PROCESSING;
+                default -> PagamentoStatus.PENDING;
+            };
+
+            if (pagamento.getStatus() == novoStatus) {
+                return;
+            }
+
+            pagamento.setStatus(novoStatus);
+            pagamento.setUpdatedAt(LocalDateTime.now());
+
+            pagamento.setPaymentMethodId(payment.getPaymentMethodId());
+            pagamento.setStatusDetail(payment.getStatusDetail());
+
+            pagamento.setTransactionId(payment.getId().toString());
+
+            if (payment.getTransactionDetails() != null) {
+                pagamento.setNsu(payment.getTransactionDetails().getExternalResourceUrl());
+                pagamento.setAuthorizationCode(payment.getAuthorizationCode());
+            }
+
+            if (novoStatus == PagamentoStatus.APPROVED) {
+                pagamento.setPaidAt(LocalDateTime.now());
+
+                Map<String, String> event = new HashMap<>();
+                event.put("orderId", pagamento.getOrder().getOrderId());
+                event.put("paymentId", pagamento.getTransactionId());
+                event.put("status", "PAID");
+
+                redisTemplate.convertAndSend(
+                        "payment_channel",
+                        new ObjectMapper().writeValueAsString(event)
+                );
+            }
+            pagamentoRepository.save(pagamento);
+
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+}

@@ -13,4 +13,6 @@ public interface ProdutoRepository extends JpaRepository<Produto, Long> {
     Optional<Produto> findByCodigo(String codigo);
 
     List<Produto> findAllByUpdateAtAfter(LocalDateTime lastSync);
+
+    List<Produto> findTop10ByOrderByCreateAtDesc();
 }
