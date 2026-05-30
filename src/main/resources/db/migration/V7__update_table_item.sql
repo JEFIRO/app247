@@ -1,1 +1,0 @@
-alter table item add column foto varchar(255) not null;

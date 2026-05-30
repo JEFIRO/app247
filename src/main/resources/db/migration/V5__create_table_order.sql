@@ -1,16 +1,18 @@
-create table orders
-(
-    order_id    varchar(36) primary key,
+CREATE TABLE orders (
+    order_id VARCHAR(36) PRIMARY KEY,
+    carrinho_id VARCHAR(36) NOT NULL,
+    user_id VARCHAR(36),
 
-    carrinho_id varchar(36)    not null,
+    subtotal DECIMAL(10,2),
+    desconto DECIMAL(10,2),
+    total DECIMAL(10,2),
 
-    total       decimal(10, 2) not null,
+    status VARCHAR(20) DEFAULT 'PENDING',
 
-    status      varchar(20) default 'PENDING',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL,
+    paid_at TIMESTAMP NULL,
 
-    created_at  timestamp   default current_timestamp,
-
-    constraint fk_order_carrinho
-        foreign key (carrinho_id)
-            references carrinho (carrinho_id)
+    CONSTRAINT fk_order_carrinho FOREIGN KEY (carrinho_id) REFERENCES carrinho(carrinho_id),
+    CONSTRAINT fk_order_user FOREIGN KEY (user_id) REFERENCES users(user_id)
 );

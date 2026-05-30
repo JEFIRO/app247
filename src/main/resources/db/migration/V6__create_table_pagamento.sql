@@ -19,6 +19,9 @@ create table pagamento
     created_at         timestamp   default current_timestamp,
 
     paid_at            timestamp,
+    updated_at         timestamp,
+    payment_method_id  varchar(100),
+    status_detail      varchar(100),
 
     constraint fk_pagamento_order
         foreign key (order_id)
