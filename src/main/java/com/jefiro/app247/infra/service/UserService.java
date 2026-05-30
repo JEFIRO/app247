@@ -4,9 +4,11 @@ import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.dto.*;
 import com.jefiro.app247.domain.model.dto.auth.AuthDTO;
 import com.jefiro.app247.domain.model.dto.auth.AuthResponse;
+import com.jefiro.app247.infra.event.UserCreatedEvent;
 import com.jefiro.app247.infra.repository.UserRepository;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -34,6 +36,8 @@ public class UserService {
     AuthenticationManager authenticationManager;
     @Autowired
     TokenService tokenService;
+    @Autowired
+    private ApplicationEventPublisher publisher;
 
 
     public UserResponseDTO saveUser(UserRequestDTO request) {
@@ -162,7 +166,12 @@ public class UserService {
             user.setSenha(
                     passwordEncoder.encode(requestDTO.senha())
             );
-            repository.save(user);
+            user = repository.save(user);
+
+
+            publisher.publishEvent(
+                    new UserCreatedEvent(user)
+            );
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
