@@ -3,10 +3,13 @@ package com.jefiro.app247.infra.service;
 import com.jefiro.app247.domain.model.Carrinho;
 import com.jefiro.app247.domain.model.Order;
 import com.jefiro.app247.domain.model.auth.User;
+import com.jefiro.app247.domain.model.dto.OrderDTO;
 import com.jefiro.app247.domain.model.enum_type.CarrinhoStatus;
 import com.jefiro.app247.infra.repository.OrderRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.NoSuchElementException;
@@ -47,6 +50,11 @@ public class OrderService {
     public Order getOrder(String id_order) {
         return repository.findById(id_order).orElseThrow(() -> new NoSuchElementException("Order não existe"));
     }
+
+    public Page<OrderDTO> getOrderByUser(Long user_id, Pageable pageable) {
+        return repository.findOrdersByUserId(user_id, pageable);
+    }
+
 
     public Order save(Order order) {
         return repository.save(order);

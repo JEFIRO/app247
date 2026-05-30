@@ -5,6 +5,7 @@ import com.jefiro.app247.domain.model.dto.UserRequestDTO;
 import com.jefiro.app247.domain.model.dto.auth.AuthDTO;
 import com.jefiro.app247.infra.repository.UserRepository;
 import com.jefiro.app247.infra.service.TokenService;
+import com.jefiro.app247.infra.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -23,41 +24,17 @@ import java.util.Map;
 @RequestMapping("auth")
 public class AuthController {
     @Autowired
-    private AuthenticationManager authenticationManager;
-    @Autowired
-    private UserRepository repository;
-    @Autowired
-    TokenService tokenService;
-    @Autowired
-    PasswordEncoder passwordEncoder;
+    UserService service;
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody @Valid AuthDTO auth) {
-        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(auth.cpf(), auth.senha());
-
-        Authentication authentication = authenticationManager.authenticate(authenticationToken);
-
-        var token = tokenService.generateToken((User) authentication.getPrincipal());
-
-        return ResponseEntity.ok(Map.of(
-                "Token", token,
-                "user", (User) authentication.getPrincipal()
-
-        ));
+        return ResponseEntity.ok(service.login(auth));
     }
 
     @PostMapping("/register")
     public ResponseEntity<?> create(@RequestBody @Valid UserRequestDTO requestDTO) {
-        if (repository.existsByCpf(requestDTO.cpf())) {
-            throw new IllegalArgumentException("já existe um usuario com esse cpf");
-        }
-        User user = new User(requestDTO);
+        service.cadastrar(requestDTO);
 
-        user.setSenha(
-                passwordEncoder.encode(requestDTO.senha())
-        );
-        repository.save(user);
         return ResponseEntity.ok().build();
     }
-
 }

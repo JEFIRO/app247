@@ -2,10 +2,17 @@ package com.jefiro.app247.infra.service;
 
 import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.dto.*;
+import com.jefiro.app247.domain.model.dto.auth.AuthDTO;
 import com.jefiro.app247.domain.model.dto.auth.AuthResponse;
 import com.jefiro.app247.infra.repository.UserRepository;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -17,15 +24,17 @@ import java.util.concurrent.TimeUnit;
 
 @Service
 public class UserService {
-
     @Autowired
     RedisTemplate<String, Object> redisTemplate;
-
     @Autowired
     private UserRepository repository;
-
     @Autowired
     PasswordEncoder passwordEncoder;
+    @Autowired
+    AuthenticationManager authenticationManager;
+    @Autowired
+    TokenService tokenService;
+
 
     public UserResponseDTO saveUser(UserRequestDTO request) {
         User user = new User(request);
@@ -38,8 +47,15 @@ public class UserService {
     }
 
 
-    public AuthResponse login(LoginRequestDTO request) {
-        return new AuthResponse(UUID.randomUUID().toString(), new UserResponseDTO(repository.findByEmail(request.email()).get()));
+    public AuthResponse login(AuthDTO auth) {
+
+        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(auth.cpf(), auth.senha());
+
+        Authentication authentication = authenticationManager.authenticate(authenticationToken);
+
+        var token = tokenService.generateToken((User) authentication.getPrincipal());
+
+        return new AuthResponse(token, (UserResponseDTO) authentication.getPrincipal());
     }
 
     public boolean recoveryPassword(String cpf) {
@@ -132,4 +148,23 @@ public class UserService {
     }
 
 
+    public Page<OrderDTO> getOrderByUser(Long user_id, Pageable pageable) {
+        return repository.findOrdersByUserId(user_id, pageable);
+    }
+
+    public void cadastrar(@Valid UserRequestDTO requestDTO) {
+        try {
+            if (repository.existsByCpf(requestDTO.cpf())) {
+                throw new IllegalArgumentException("já existe um usuario com esse cpf");
+            }
+            User user = new User(requestDTO);
+
+            user.setSenha(
+                    passwordEncoder.encode(requestDTO.senha())
+            );
+            repository.save(user);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
