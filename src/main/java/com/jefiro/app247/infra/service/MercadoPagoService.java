@@ -4,12 +4,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jefiro.app247.domain.model.Item;
 import com.jefiro.app247.domain.model.Order;
 import com.jefiro.app247.domain.model.Pagamento;
+import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.dto.PagamentoResponse;
+import com.jefiro.app247.domain.model.enum_type.OrderStatus;
 import com.jefiro.app247.domain.model.enum_type.PagamentoStatus;
 import com.jefiro.app247.domain.model.enum_type.PagamentoTipo;
 import com.jefiro.app247.infra.repository.PagamentoRepository;
 import com.mercadopago.MercadoPagoConfig;
 import com.mercadopago.client.common.IdentificationRequest;
+import com.mercadopago.client.common.PhoneRequest;
 import com.mercadopago.client.payment.PaymentClient;
 import com.mercadopago.client.payment.PaymentCreateRequest;
 import com.mercadopago.client.payment.PaymentPayerRequest;
@@ -19,6 +22,7 @@ import com.mercadopago.exceptions.MPException;
 import com.mercadopago.resources.payment.Payment;
 import com.mercadopago.resources.preference.Preference;
 import jakarta.annotation.PostConstruct;
+import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -36,6 +40,8 @@ public class MercadoPagoService {
 
     @Autowired
     private PagamentoRepository pagamentoRepository;
+    @Autowired
+    OrderService orderService;
 
     @Autowired
     private StringRedisTemplate redisTemplate;
@@ -61,7 +67,6 @@ public class MercadoPagoService {
                             )
                             .description("Pedido " + order.getOrderId())
                             .paymentMethodId("pix")
-                            //.notificationUrl("https:// https://tayna-fitful-mariko.ngrok-free.dev/webhook/mercadopago")
                             .payer(
                                     PaymentPayerRequest.builder()
                                             .email("teste@test.com")
@@ -129,6 +134,7 @@ public class MercadoPagoService {
         List<PreferenceItemRequest> items = new ArrayList<>();
 
         for (Item item : order.getCarrinho().getItems()) {
+
             PreferenceItemRequest preferenceItem =
                     PreferenceItemRequest.builder()
                             .title(item.getName())
@@ -154,14 +160,40 @@ public class MercadoPagoService {
                         .installments(12)
                         .build();
 
-        PreferenceRequest request =
+        PreferenceRequest.PreferenceRequestBuilder requestBuilder =
                 PreferenceRequest.builder()
                         .items(items)
                         .externalReference(order.getOrderId())
                         .backUrls(backUrls)
                         .autoReturn("approved")
-                        .paymentMethods(paymentMethods)
-                        .build();
+                        .paymentMethods(paymentMethods);
+
+        if (order.getUser() != null) {
+
+            User user = order.getUser();
+
+            PreferencePayerRequest payer =
+                    PreferencePayerRequest.builder()
+                            .name(user.getNome())
+                            .surname(user.getSobrenome())
+                            .email(user.getEmail())
+                            .phone(
+                                    PhoneRequest.builder()
+                                            .number(user.getTelefone())
+                                            .build()
+                            )
+                            .identification(
+                                    IdentificationRequest.builder()
+                                            .type("CPF")
+                                            .number(user.getCpf())
+                                            .build()
+                            )
+                            .build();
+
+            requestBuilder.payer(payer);
+        }
+
+        PreferenceRequest request = requestBuilder.build();
 
         PreferenceClient client = new PreferenceClient();
 
@@ -170,14 +202,18 @@ public class MercadoPagoService {
         Map<String, Object> response = new HashMap<>();
         response.put("init_point", preference.getInitPoint());
         response.put("id", preference.getId());
+
         System.out.println(response);
+
         return response;
     }
 
 
+    @Transactional
     public void atualizarPagamento(String paymentId) {
 
         try {
+
             PaymentClient client = new PaymentClient();
             Payment payment = client.get(Long.parseLong(paymentId));
 
@@ -208,7 +244,6 @@ public class MercadoPagoService {
 
             pagamento.setPaymentMethodId(payment.getPaymentMethodId());
             pagamento.setStatusDetail(payment.getStatusDetail());
-
             pagamento.setTransactionId(payment.getId().toString());
 
             if (payment.getTransactionDetails() != null) {
@@ -216,7 +251,22 @@ public class MercadoPagoService {
                 pagamento.setAuthorizationCode(payment.getAuthorizationCode());
             }
 
+            Order order = pagamento.getOrder();
+
+            if (order != null) {
+
+                switch (novoStatus) {
+                    case APPROVED -> order.setStatus(OrderStatus.PAID);
+                    case PROCESSING -> order.setStatus(OrderStatus.PROCESSING);
+                    case CANCELLED, DENIED -> order.setStatus(OrderStatus.CANCELLED);
+                    default -> order.setStatus(OrderStatus.PENDING);
+                }
+
+                orderService.save(order);
+            }
+
             if (novoStatus == PagamentoStatus.APPROVED) {
+
                 pagamento.setPaidAt(LocalDateTime.now());
 
                 Map<String, String> event = new HashMap<>();
@@ -229,6 +279,7 @@ public class MercadoPagoService {
                         new ObjectMapper().writeValueAsString(event)
                 );
             }
+
             pagamentoRepository.save(pagamento);
 
         } catch (Exception e) {

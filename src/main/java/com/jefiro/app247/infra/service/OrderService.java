@@ -35,7 +35,7 @@ public class OrderService {
         carrinhoService.save(carrinho);
 
         Order order = new Order(carrinho);
-        
+
         if (id_user != null) {
             User user = userService.getUser(id_user);
             order.setUser(user);
@@ -48,4 +48,7 @@ public class OrderService {
         return repository.findById(id_order).orElseThrow(() -> new NoSuchElementException("Order não existe"));
     }
 
+    public Order save(Order order) {
+        return repository.save(order);
+    }
 }

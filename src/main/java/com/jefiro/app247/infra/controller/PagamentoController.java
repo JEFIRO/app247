@@ -11,14 +11,14 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 @RestController()
-    @RequestMapping("/pagamento")
+@RequestMapping("/pagamento")
 public class PagamentoController {
     @Autowired
     PagamentoService service;
 
-    @GetMapping
-    public PagamentoResponse getPagamento(@RequestParam String id) {
-        return service.gerarPix(id);
+    @GetMapping("/terminal")
+    public PagamentoResponse getPagamento(@RequestParam String carrinho_id) {
+        return service.gerarPix(carrinho_id);
     }
 
     @GetMapping("/checkout")

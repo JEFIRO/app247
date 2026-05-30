@@ -21,8 +21,8 @@ public class OrderController {
     }
 
     @GetMapping()
-    public OrderResponse order(@RequestParam String carrinho_id, @RequestParam(required = false) Long id_user) {
-        return new OrderResponse(service.createOrder(carrinho_id,id_user));
+    public OrderResponse getOrder(@RequestParam String carrinho_id) {
+        return new OrderResponse(service.getOrder(carrinho_id));
     }
 
 

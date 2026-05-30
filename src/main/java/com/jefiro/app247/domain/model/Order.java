@@ -13,12 +13,10 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
-
 @AllArgsConstructor
 @NoArgsConstructor
-
-@Table(name = "orders")
 @Entity
+@Table(name = "orders")
 public class Order {
 
     @Id
@@ -26,19 +24,62 @@ public class Order {
     private String orderId;
 
     @OneToOne
-    @JoinColumn(name = "carrinho_id")
+    @JoinColumn(name = "carrinho_id", nullable = false)
     private Carrinho carrinho;
+
+    @ManyToOne
+    @JoinColumn(name = "user_id")
+    private User user;
+
+    private BigDecimal subtotal;
+
+    private BigDecimal desconto;
 
     private BigDecimal total;
 
     @Enumerated(EnumType.STRING)
     private OrderStatus status;
 
+    @Column(nullable = false)
     private LocalDateTime createdAt;
 
-    @ManyToOne
-    @JoinColumn(name = "user_id")
-    private User user;
+    private LocalDateTime updatedAt;
+
+    private LocalDateTime paidAt;
+
+    @OneToOne(mappedBy = "order")
+    private Pagamento pagamento;
+
+    @PrePersist
+    public void prePersist() {
+        createdAt = LocalDateTime.now();
+
+        if (status == null) {
+            status = OrderStatus.PENDING;
+        }
+
+        if (subtotal == null && carrinho != null) {
+            subtotal = carrinho.getSubtotal();
+        }
+
+        if (total == null) {
+            total = subtotal;
+        }
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
+
+    public Order(Carrinho carrinho, User user) {
+        this.carrinho = carrinho;
+        this.user = user;
+        this.subtotal = carrinho.getSubtotal();
+        this.total = carrinho.getSubtotal();
+        this.status = OrderStatus.PENDING;
+        this.createdAt = LocalDateTime.now();
+    }
 
     public Order(Carrinho carrinho) {
         this.createdAt = LocalDateTime.now();

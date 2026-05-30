@@ -17,15 +17,17 @@ public class PagamentoService {
     @Autowired
     MercadoPagoService mercadoPagoService;
 
-    public PagamentoResponse gerarPix(String orderId) {
+    public PagamentoResponse gerarPix(String carrinho_id) {
 
-        Order order = orderService.getOrder(orderId);
+        Carrinho carrinho = carrinhoService.getById(carrinho_id);
+
+        Order order = orderService.createOrder(carrinho.getCarrinhoId(), null);
 
         return mercadoPagoService.criarPix(order);
     }
 
-    public Map<String, Object> gerarCheckout(String orderId, Long user_id) throws Exception {
-        Carrinho carrinho = carrinhoService.getById(orderId);
+    public Map<String, Object> gerarCheckout(String carrinho_id, Long user_id) throws Exception {
+        Carrinho carrinho = carrinhoService.getById(carrinho_id);
 
         Order order = orderService.createOrder(carrinho.getCarrinhoId(), user_id);
 
