@@ -3,6 +3,7 @@ package com.jefiro.app247.domain.model.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.jefiro.app247.domain.model.auth.Endereco;
+import com.jefiro.app247.domain.model.auth.RoleUser;
 import jakarta.validation.constraints.*;
 
 import java.time.LocalDate;
@@ -34,7 +35,7 @@ public record UserRequestDTO(
         @JsonFormat(pattern = "dd/MM/yyyy")
         LocalDate dataNascimento,
 
-        Endereco endereco
+        RoleUser roleUser
 
 ) {
 }

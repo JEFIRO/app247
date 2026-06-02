@@ -30,6 +30,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -67,6 +68,7 @@ public class MercadoPagoService {
                             )
                             .description("Pedido " + order.getOrderId())
                             .paymentMethodId("pix")
+                            .dateOfExpiration(OffsetDateTime.now().plusMinutes(5))
                             .payer(
                                     PaymentPayerRequest.builder()
                                             .email("teste@test.com")
@@ -76,14 +78,9 @@ public class MercadoPagoService {
 
             Payment payment = client.create(request);
 
-            Pagamento pagamento = new Pagamento();
+            order.setStatus(OrderStatus.PENDING);
 
-            pagamento.setOrder(order);
-            pagamento.setValor(order.getTotal());
-            pagamento.setTipo(PagamentoTipo.PIX);
-            pagamento.setTransactionId(payment.getId().toString());
-
-            pagamento.setStatus(PagamentoStatus.PENDING);
+            Pagamento pagamento = new Pagamento(order, PagamentoTipo.PIX, payment);
 
             pagamentoRepository.save(pagamento);
 
@@ -203,8 +200,6 @@ public class MercadoPagoService {
         response.put("init_point", preference.getInitPoint());
         response.put("id", preference.getId());
 
-        System.out.println(response);
-
         return response;
     }
 
@@ -279,7 +274,7 @@ public class MercadoPagoService {
                         new ObjectMapper().writeValueAsString(event)
                 );
             }
-
+            pagamento.setUpdatedAt(LocalDateTime.now());
             pagamentoRepository.save(pagamento);
 
         } catch (Exception e) {

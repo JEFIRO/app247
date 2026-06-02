@@ -22,8 +22,6 @@ public record UserResponseDTO(
 
         LocalDate dataNascimento,
 
-        Endereco endereco,
-
         String fotoPerfil,
 
         Boolean ativo,
@@ -47,7 +45,6 @@ public record UserResponseDTO(
                 user.getCpf(),
                 user.getTelefone(),
                 user.getDataNascimento(),
-                new Endereco(),
                 user.getFotoPerfil(),
                 user.getAtivo(),
                 user.getEmailVerificado(),

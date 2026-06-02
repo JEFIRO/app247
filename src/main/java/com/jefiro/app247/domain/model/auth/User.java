@@ -1,12 +1,10 @@
 package com.jefiro.app247.domain.model.auth;
 
+import com.jefiro.app247.domain.model.Condominio;
 import com.jefiro.app247.domain.model.Order;
 import com.jefiro.app247.domain.model.dto.UserRequestDTO;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -22,6 +20,7 @@ import java.util.UUID;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@Builder
 
 @Table(name = "users")
 @Entity
@@ -57,6 +56,10 @@ public class User implements UserDetails {
     private LocalDateTime updatedAt;
     private LocalDateTime ultimoLogin;
 
+    @ManyToOne
+@JoinColumn(name = "condominio_id")
+private Condominio condominio;
+
     public User(UserRequestDTO response) {
         this.uuidUser = UUID.randomUUID().toString();
         this.nome = response.nome();
@@ -68,9 +71,25 @@ public class User implements UserDetails {
         this.dataNascimento = response.dataNascimento();
         this.ativo = true;
         this.emailVerificado = false;
-        this.role = RoleUser.USER;
+
+        if (response.roleUser() != null) {
+            this.role = response.roleUser();
+        } else {
+            this.role = RoleUser.USER;
+        }
+
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+    }
+
+    @PrePersist
+    public void prePersist() {
+        if (uuidUser == null) {
+            uuidUser = UUID.randomUUID().toString();
+        }
+        if (role == null) {
+            role = RoleUser.USER;
+        }
     }
 
     @Override

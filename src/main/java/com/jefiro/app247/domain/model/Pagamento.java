@@ -2,6 +2,7 @@ package com.jefiro.app247.domain.model;
 
 import com.jefiro.app247.domain.model.enum_type.PagamentoStatus;
 import com.jefiro.app247.domain.model.enum_type.PagamentoTipo;
+import com.mercadopago.resources.payment.Payment;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -38,9 +39,9 @@ public class Pagamento {
 
     private String authorizationCode;
 
-    private LocalDateTime createdAt;
-
     private LocalDateTime paidAt;
+
+    private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
 
@@ -50,6 +51,19 @@ public class Pagamento {
 
     public Pagamento() {
         this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
         this.status = PagamentoStatus.PENDING;
     }
+
+    public Pagamento(Order order, PagamentoTipo tipo, Payment payment) {
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+        this.order = order;
+        this.valor = order.getTotal();
+        this.tipo = tipo;
+        this.status = PagamentoStatus.PENDING;
+        this.transactionId = payment.getId().toString();
+    }
+
+
 }

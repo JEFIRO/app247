@@ -1,0 +1,62 @@
+package com.jefiro.app247.infra.repository;
+
+import com.jefiro.app247.domain.model.auth.User;
+import com.jefiro.app247.infra.service.UserService;
+import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.test.context.ActiveProfiles;
+
+import java.time.LocalDate;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+@DataJpaTest
+@ActiveProfiles("test")
+class UserRepositoryTest {
+
+    @Autowired
+    EntityManager entityManager;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Test
+    void getByCpf() {
+        User user = createUser();
+
+        User found = entityManager
+                .createQuery("SELECT u FROM User u WHERE u.cpf = :cpf", User.class)
+                .setParameter("cpf", "12345678901")
+                .getSingleResult();
+
+        assertNotNull(found);
+        assertEquals(user.getCpf(), found.getCpf());
+    }
+
+    @Test
+    @DisplayName("Pagar os Orders do usuário com sucesso")
+    void findOrdersByUserIdSuccess() {
+        User user = createUser();
+        userRepository.findOrdersByUserId(user.getUserId(), Pageable.ofSize(1));
+
+    }
+
+    private User createUser() {
+        User user = User.builder()
+                .nome("Teste")
+                .sobrenome("User")
+                .email("teste@email.com")
+                .senha("123456")
+                .cpf("12345678901")
+                .telefone("71999999999")
+                .dataNascimento(LocalDate.of(2000, 1, 1))
+                .build();
+
+        entityManager.persist(user);
+        return user;
+    }
+}

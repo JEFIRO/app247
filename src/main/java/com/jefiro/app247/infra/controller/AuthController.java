@@ -31,6 +31,11 @@ public class AuthController {
         return ResponseEntity.ok(service.login(auth));
     }
 
+    @PostMapping("/login/admin")
+    public ResponseEntity<?> loginAdmin(@RequestBody @Valid AuthDTO auth) {
+        return ResponseEntity.ok(service.loginAdmin(auth));
+    }
+
     @PostMapping("/register")
     public ResponseEntity<?> create(@RequestBody @Valid UserRequestDTO requestDTO) {
         service.cadastrar(requestDTO);

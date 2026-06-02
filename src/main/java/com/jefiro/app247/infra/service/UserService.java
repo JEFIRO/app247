@@ -1,24 +1,32 @@
 package com.jefiro.app247.infra.service;
 
+import com.jefiro.app247.domain.model.Produto;
+import com.jefiro.app247.domain.model.auth.RoleUser;
 import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.dto.*;
 import com.jefiro.app247.domain.model.dto.auth.AuthDTO;
 import com.jefiro.app247.domain.model.dto.auth.AuthResponse;
 import com.jefiro.app247.infra.event.UserCreatedEvent;
 import com.jefiro.app247.infra.repository.UserRepository;
+import com.mercadopago.net.HttpStatus;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Random;
 import java.util.UUID;
@@ -38,6 +46,8 @@ public class UserService {
     TokenService tokenService;
     @Autowired
     private ApplicationEventPublisher publisher;
+    @Autowired
+    FileStorageService fileStorageService;
 
 
     public UserResponseDTO saveUser(UserRequestDTO request) {
@@ -50,6 +60,10 @@ public class UserService {
         return repository.findById(user).orElseThrow(() -> new RuntimeException("Usuario não encontrado"));
     }
 
+    public User getUser(String user) {
+        return repository.getByCpf(user).orElseThrow(() -> new RuntimeException("Usuario não encontrado"));
+    }
+
 
     public AuthResponse login(AuthDTO auth) {
 
@@ -57,9 +71,40 @@ public class UserService {
 
         Authentication authentication = authenticationManager.authenticate(authenticationToken);
 
-        var token = tokenService.generateToken((User) authentication.getPrincipal());
+        User user = (User) authentication.getPrincipal();
 
-        return new AuthResponse(token, (UserResponseDTO) authentication.getPrincipal());
+        String token = tokenService.generateToken(user);
+
+        return new AuthResponse(
+                token,
+                new UserResponseDTO(user)
+        );
+    }
+
+    public AuthResponse loginAdmin(AuthDTO auth) {
+
+        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(auth.cpf(), auth.senha());
+
+        Authentication authentication = authenticationManager.authenticate(authenticationToken);
+        User user = (User) authentication.getPrincipal();
+
+        boolean autorizado =
+                user.getRole() == RoleUser.ADMIN ||
+                        user.getRole() == RoleUser.GERENTE;
+
+        if (!autorizado) {
+            throw new ResponseStatusException(
+                    HttpStatusCode.valueOf(403),
+                    "Você não possui permissão para esta ação"
+            );
+        }
+
+        String token = tokenService.generateToken(user);
+
+        return new AuthResponse(
+                token,
+                new UserResponseDTO(user)
+        );
     }
 
     public boolean recoveryPassword(String cpf) {
@@ -172,6 +217,45 @@ public class UserService {
             publisher.publishEvent(
                     new UserCreatedEvent(user)
             );
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public User cadastrar(@Valid UserRequestDTO requestDTO, RoleUser roleUser) {
+        try {
+            if (repository.existsByCpf(requestDTO.cpf())) {
+                throw new IllegalArgumentException("já existe um usuario com esse cpf");
+            }
+            User user = new User(requestDTO);
+
+            user.setRole(roleUser);
+
+            user.setSenha(
+                    passwordEncoder.encode(requestDTO.senha())
+            );
+            user = repository.save(user);
+
+            publisher.publishEvent(
+                    new UserCreatedEvent(user)
+            );
+            return user;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Transactional
+    public boolean salvarFoto(MultipartFile file, Long id) {
+        try {
+            User user = repository.findById(id).orElseThrow(() -> new RuntimeException(""));
+
+            user.setFotoPerfil(fileStorageService.salvarArquivo(file));
+
+            repository.save(user);
+
+            return true;
+
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

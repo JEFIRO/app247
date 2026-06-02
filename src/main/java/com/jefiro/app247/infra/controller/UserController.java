@@ -1,16 +1,23 @@
 package com.jefiro.app247.infra.controller;
 
 
+import com.jefiro.app247.domain.model.Produto;
+import com.jefiro.app247.domain.model.dto.CreateProductDTO;
 import com.jefiro.app247.domain.model.dto.OrderDTO;
 import com.jefiro.app247.domain.model.dto.PasswordRecovery;
 import com.jefiro.app247.domain.model.dto.ResetPasswordRequest;
+import com.jefiro.app247.infra.service.FileStorageService;
 import com.jefiro.app247.infra.service.UserService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.Map;
 
 @RestController
@@ -18,6 +25,7 @@ import java.util.Map;
 public class UserController {
     @Autowired
     UserService service;
+
 
     @PostMapping("/reculperar")
     public ResponseEntity<?> reculperar(@RequestBody PasswordRecovery passwordRecovery) {
@@ -42,4 +50,8 @@ public class UserController {
         return ResponseEntity.ok(service.getOrderByUser(userId, pageable));
     }
 
+    @PostMapping(value = "foto", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> salvar(@RequestPart(value = "file") MultipartFile file, @RequestParam Long id) {
+        return ResponseEntity.ok(service.salvarFoto(file, id));
+    }
 }
