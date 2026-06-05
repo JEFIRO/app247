@@ -12,7 +12,7 @@ CREATE TABLE terminal
     ativo           BOOLEAN   DEFAULT TRUE,
     status          VARCHAR(30),
 
-    last_ping       TIMESTAMP,
+    last_ping       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     versao_software VARCHAR(50),
 
     endereco_id     BIGINT,

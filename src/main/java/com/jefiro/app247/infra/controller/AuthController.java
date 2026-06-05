@@ -7,16 +7,14 @@ import com.jefiro.app247.infra.repository.UserRepository;
 import com.jefiro.app247.infra.service.TokenService;
 import com.jefiro.app247.infra.service.UserService;
 import jakarta.validation.Valid;
+import lombok.Generated;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
@@ -39,6 +37,12 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<?> create(@RequestBody @Valid UserRequestDTO requestDTO) {
         service.cadastrar(requestDTO);
+
+        return ResponseEntity.ok().build();
+    }
+     @GetMapping("/send-code/{email}")
+    public ResponseEntity<?> sendCode(@PathVariable String email) {
+        service.sendCode(email);
 
         return ResponseEntity.ok().build();
     }

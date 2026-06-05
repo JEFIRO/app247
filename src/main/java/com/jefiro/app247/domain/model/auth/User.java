@@ -42,6 +42,7 @@ public class User implements UserDetails {
     private String telefone;
 
     private LocalDate dataNascimento;
+
     @OneToMany(mappedBy = "user")
     private List<Order> orders;
 
@@ -57,8 +58,8 @@ public class User implements UserDetails {
     private LocalDateTime ultimoLogin;
 
     @ManyToOne
-@JoinColumn(name = "condominio_id")
-private Condominio condominio;
+    @JoinColumn(name = "condominio_id")
+    private Condominio condominio;
 
     public User(UserRequestDTO response) {
         this.uuidUser = UUID.randomUUID().toString();

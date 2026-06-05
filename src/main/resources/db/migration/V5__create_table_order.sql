@@ -3,6 +3,7 @@ CREATE TABLE orders
     order_id    VARCHAR(36) PRIMARY KEY,
     carrinho_id VARCHAR(36) NOT NULL,
     user_id     VARCHAR(36),
+    terminal_id varchar(36),
 
     subtotal    DECIMAL(10, 2),
     desconto    DECIMAL(10, 2),

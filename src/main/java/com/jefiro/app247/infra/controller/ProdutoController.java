@@ -38,10 +38,9 @@ public class ProdutoController {
 
     @GetMapping
     public ResponseEntity<PageResponse<ProdutoListagemDTO>> listar(Pageable pageable) {
-        // Busca a página de entidades
+
         Page<Produto> produtos = produtoService.listar(pageable);
 
-        // Mapeia cada Produto para ProdutoListagemDTO
         List<ProdutoListagemDTO> dtos = produtos.getContent()
                 .stream()
                 .map(ProdutoListagemDTO::new)

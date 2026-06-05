@@ -15,6 +15,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.util.NoSuchElementException;
+
 @Service
 public class CondominioService {
     @Autowired
@@ -33,7 +35,6 @@ public class CondominioService {
             Endereco endereco = new Endereco(request.condominio().endereco());
 
             Condominio condominio = new Condominio(request.condominio(), endereco);
-
 
             Terminal terminal = new Terminal(request.terminal());
 

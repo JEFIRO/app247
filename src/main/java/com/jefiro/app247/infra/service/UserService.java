@@ -1,14 +1,16 @@
 package com.jefiro.app247.infra.service;
 
-import com.jefiro.app247.domain.model.Produto;
+import com.jefiro.app247.domain.model.Condominio;
 import com.jefiro.app247.domain.model.auth.RoleUser;
 import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.dto.*;
 import com.jefiro.app247.domain.model.dto.auth.AuthDTO;
 import com.jefiro.app247.domain.model.dto.auth.AuthResponse;
+import com.jefiro.app247.domain.model.dto.auth.ChangePasswordRequest;
 import com.jefiro.app247.infra.event.UserCreatedEvent;
+import com.jefiro.app247.infra.exception.*;
+import com.jefiro.app247.infra.repository.CondominioRepository;
 import com.jefiro.app247.infra.repository.UserRepository;
-import com.mercadopago.net.HttpStatus;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
@@ -17,6 +19,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -26,8 +29,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.io.IOException;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -48,72 +53,80 @@ public class UserService {
     private ApplicationEventPublisher publisher;
     @Autowired
     FileStorageService fileStorageService;
-
-
-    public UserResponseDTO saveUser(UserRequestDTO request) {
-        User user = new User(request);
-
-        return new UserResponseDTO(repository.save(user));
-    }
+    @Autowired
+    CondominioRepository condominioRepository;
 
     public User getUser(Long user) {
-        return repository.findById(user).orElseThrow(() -> new RuntimeException("Usuario não encontrado"));
+        return repository.findById(user).orElseThrow(UserNotFoundException::new);
     }
 
-    public User getUser(String user) {
-        return repository.getByCpf(user).orElseThrow(() -> new RuntimeException("Usuario não encontrado"));
+    private User findByCpf(String cpf) {
+        return repository.getByCpf(cpf).orElseThrow(UserNotFoundException::new);
     }
 
 
     public AuthResponse login(AuthDTO auth) {
 
-        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(auth.cpf(), auth.senha());
+        try {
+            UsernamePasswordAuthenticationToken authenticationToken =
+                    new UsernamePasswordAuthenticationToken(
+                            auth.cpf(),
+                            auth.senha()
+                    );
 
-        Authentication authentication = authenticationManager.authenticate(authenticationToken);
+            Authentication authentication =
+                    authenticationManager.authenticate(authenticationToken);
 
-        User user = (User) authentication.getPrincipal();
+            User user = (User) authentication.getPrincipal();
 
-        String token = tokenService.generateToken(user);
+            String token = tokenService.generateToken(user);
 
-        return new AuthResponse(
-                token,
-                new UserResponseDTO(user)
-        );
+            return new AuthResponse(
+                    token,
+                    new UserResponseDTO(user)
+            );
+
+        } catch (BadCredentialsException e) {
+            throw new InvalidPasswordException("CPF ou senha inválidos");
+        }
     }
 
     public AuthResponse loginAdmin(AuthDTO auth) {
+        try {
+            UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(auth.cpf(), auth.senha());
 
-        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(auth.cpf(), auth.senha());
+            Authentication authentication = authenticationManager.authenticate(authenticationToken);
+            User user = (User) authentication.getPrincipal();
 
-        Authentication authentication = authenticationManager.authenticate(authenticationToken);
-        User user = (User) authentication.getPrincipal();
+            boolean autorizado =
+                    user.getRole() == RoleUser.ADMIN ||
+                            user.getRole() == RoleUser.GERENTE;
 
-        boolean autorizado =
-                user.getRole() == RoleUser.ADMIN ||
-                        user.getRole() == RoleUser.GERENTE;
+            if (!autorizado) {
+                throw new ResponseStatusException(
+                        HttpStatusCode.valueOf(403),
+                        "Você não possui permissão para esta ação"
+                );
+            }
 
-        if (!autorizado) {
-            throw new ResponseStatusException(
-                    HttpStatusCode.valueOf(403),
-                    "Você não possui permissão para esta ação"
+            String token = tokenService.generateToken(user);
+
+            return new AuthResponse(
+                    token,
+                    new UserResponseDTO(user)
             );
+        } catch (BadCredentialsException e) {
+            throw new InvalidPasswordException("CPF ou senha inválidos");
         }
-
-        String token = tokenService.generateToken(user);
-
-        return new AuthResponse(
-                token,
-                new UserResponseDTO(user)
-        );
     }
 
-    public boolean recoveryPassword(String cpf) {
+    public void recoveryPassword(String cpf) {
         try {
-            System.out.println(cpf);
-            User user = repository.getByCpf(cpf)
-                    .orElseThrow(() -> new UsernameNotFoundException("Usuário não existe"));
+            User user = repository.getByCpf(cpf).orElseThrow(() -> new UserNotFoundException("Usuário não existe"));
+
             String code = String.valueOf(100000 + new Random().nextInt(900000));
-            PasswordRecovery passwordRecovery = new PasswordRecovery(code, user.getEmail(), user.getCpf(), user.getNome());
+
+            ValidateCodeRequest passwordRecovery = new ValidateCodeRequest(code, user.getCpf(), user.getEmail(), user.getNome());
 
             redisTemplate.opsForList().leftPush(
                     "recovery_queue",
@@ -125,25 +138,24 @@ public class UserService {
                     passwordRecovery,
                     Duration.ofMinutes(15)
             );
-            return true;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
 
     }
 
-    public String verificarCode(PasswordRecovery passwordRecovery) {
+    public String verificarCode(ValidateCodeRequest passwordRecovery) {
         try {
-            PasswordRecovery recovery = (PasswordRecovery) redisTemplate
+            ValidateCodeRequest recovery = (ValidateCodeRequest) redisTemplate
                     .opsForValue()
                     .get("recovery:" + passwordRecovery.cpf());
 
             if (recovery == null) {
-                throw new RuntimeException("Código expirado");
+                throw new ExpiredCodeException("Código expirado");
             }
 
             if (!recovery.code().equals(passwordRecovery.code())) {
-                throw new RuntimeException("Código inválido");
+                throw new InvalidCodeException("Código inválido");
             }
 
             redisTemplate.delete(
@@ -172,20 +184,18 @@ public class UserService {
             String token = (String) redisTemplate.opsForValue()
                     .get("reset:" + request.cpf());
 
+
             if (token == null) {
-                throw new RuntimeException("Token expirado");
+                throw new ExpiredTokenException();
             }
 
             if (!token.equals(request.token())) {
-                throw new RuntimeException("Token inválido");
+                throw new InvalidTokenException();
             }
 
-            User user = repository.getByCpf(request.cpf())
-                    .orElseThrow();
+            User user = findByCpf(request.cpf());
 
-            user.setSenha(
-                    passwordEncoder.encode(request.novaSenha())
-            );
+            user.setSenha(passwordEncoder.encode(request.novaSenha()));
 
             repository.save(user);
 
@@ -204,7 +214,7 @@ public class UserService {
     public void cadastrar(@Valid UserRequestDTO requestDTO) {
         try {
             if (repository.existsByCpf(requestDTO.cpf())) {
-                throw new IllegalArgumentException("já existe um usuario com esse cpf");
+                throw new DuplicateCpfException();
             }
             User user = new User(requestDTO);
 
@@ -225,8 +235,9 @@ public class UserService {
     public User cadastrar(@Valid UserRequestDTO requestDTO, RoleUser roleUser) {
         try {
             if (repository.existsByCpf(requestDTO.cpf())) {
-                throw new IllegalArgumentException("já existe um usuario com esse cpf");
+                throw new DuplicateCpfException();
             }
+
             User user = new User(requestDTO);
 
             user.setRole(roleUser);
@@ -248,7 +259,7 @@ public class UserService {
     @Transactional
     public boolean salvarFoto(MultipartFile file, Long id) {
         try {
-            User user = repository.findById(id).orElseThrow(() -> new RuntimeException(""));
+            User user = getUser(id);
 
             user.setFotoPerfil(fileStorageService.salvarArquivo(file));
 
@@ -259,5 +270,80 @@ public class UserService {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public void alterarSenha(ChangePasswordRequest request) {
+        try {
+            User user = getUser(request.userId());
+
+            if (!passwordEncoder.matches(request.oldPassword(), user.getSenha())) {
+                throw new InvalidPasswordException("Senha atual incorreta");
+            }
+
+            user.setSenha(passwordEncoder.encode(request.newPassword()));
+
+            repository.save(user);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void atualizarUsuario(Long id, UserUpdate request) {
+
+        User user = getUser(id);
+
+        if (request.nome() != null) {
+            user.setNome(request.nome());
+        }
+
+        if (request.sobrenome() != null) {
+            user.setSobrenome(request.sobrenome());
+        }
+
+        if (request.email() != null) {
+            user.setEmail(request.email());
+        }
+
+        if (request.telefone() != null) {
+            user.setTelefone(request.telefone());
+        }
+
+        if (request.ativo() != null) {
+            user.setAtivo(request.ativo());
+        }
+
+
+        if (request.condominioId() != null) {
+            Condominio condominio = findById(request.condominioId());
+            user.setCondominio(condominio);
+        }
+
+        user.setUpdatedAt(LocalDateTime.now());
+
+        repository.save(user);
+    }
+
+    public Condominio findById(Long id) {
+        return condominioRepository.findById(id).orElseThrow(() -> new NoSuchElementException("Condominio não encontrado"));
+    }
+
+    public void sendCode(String email) {
+        if (email.isEmpty()) {
+            throw new RuntimeException();
+        }
+        String code = String.valueOf(100000 + new Random().nextInt(900000));
+
+        var map = Map.of("code", code, "email", email);
+
+        redisTemplate.opsForList().leftPush(
+                "valid_email_queue",
+                map
+        );
+
+        redisTemplate.opsForValue().set(
+                "valid_email:" + email,
+                map,
+                Duration.ofMinutes(15)
+        );
     }
 }

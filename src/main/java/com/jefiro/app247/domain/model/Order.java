@@ -30,6 +30,7 @@ public class Order {
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;
+    private String terminalId;
 
     private BigDecimal subtotal;
 
@@ -86,5 +87,6 @@ public class Order {
         this.status = OrderStatus.PENDING;
         this.carrinho = carrinho;
         this.total = carrinho.getSubtotal();
+        this.terminalId = carrinho.getTerminalId();
     }
 }

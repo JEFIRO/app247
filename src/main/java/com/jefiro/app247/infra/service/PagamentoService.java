@@ -4,6 +4,7 @@ import com.jefiro.app247.domain.model.Carrinho;
 import com.jefiro.app247.domain.model.Order;
 import com.jefiro.app247.domain.model.dto.PagamentoResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
@@ -33,6 +34,7 @@ public class PagamentoService {
 
         return mercadoPagoService.criarCheckout(order);
     }
+
 
 
 }

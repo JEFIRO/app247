@@ -1,12 +1,8 @@
 package com.jefiro.app247.infra.controller;
 
 
-import com.jefiro.app247.domain.model.Produto;
-import com.jefiro.app247.domain.model.dto.CreateProductDTO;
-import com.jefiro.app247.domain.model.dto.OrderDTO;
-import com.jefiro.app247.domain.model.dto.PasswordRecovery;
-import com.jefiro.app247.domain.model.dto.ResetPasswordRequest;
-import com.jefiro.app247.infra.service.FileStorageService;
+import com.jefiro.app247.domain.model.dto.*;
+import com.jefiro.app247.domain.model.dto.auth.ChangePasswordRequest;
 import com.jefiro.app247.infra.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,7 +13,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.Map;
 
 @RestController
@@ -26,20 +21,31 @@ public class UserController {
     @Autowired
     UserService service;
 
+    @PostMapping("/recuperar")
+    public ResponseEntity<Map<String, String>> recuperar(@RequestBody @Valid PasswordRecovery request) {
+        service.recoveryPassword(request.cpf());
 
-    @PostMapping("/reculperar")
-    public ResponseEntity<?> reculperar(@RequestBody PasswordRecovery passwordRecovery) {
-        return ResponseEntity.ok(service.recoveryPassword(passwordRecovery.cpf()));
+        return ResponseEntity.accepted().body(
+                Map.of("message", "Se o CPF existir, enviamos instruções para recuperação.")
+        );
     }
 
     @PostMapping("/validar")
-    public ResponseEntity<?> validar(@RequestBody PasswordRecovery passwordRecovery) {
+    public ResponseEntity<?> validar(@RequestBody @Valid ValidateCodeRequest passwordRecovery) {
         return ResponseEntity.ok(Map.of("token", service.verificarCode(passwordRecovery)));
     }
 
     @PostMapping("/redefinir-senha")
-    public ResponseEntity<?> redefinirSenha(@RequestBody ResetPasswordRequest request) {
+    public ResponseEntity<?> redefinirSenha(@RequestBody @Valid ResetPasswordRequest request) {
         return ResponseEntity.ok(service.novaSenha(request));
+    }
+
+    @PostMapping("/alterar-senha")
+    public ResponseEntity<Map<String, String>> alterarSenha(
+            @RequestBody ChangePasswordRequest request
+    ) {
+        service.alterarSenha(request);
+        return ResponseEntity.ok(Map.of("message", "Senha alterada com sucesso"));
     }
 
     @GetMapping("/{userId}/orders")
@@ -53,5 +59,11 @@ public class UserController {
     @PostMapping(value = "foto", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> salvar(@RequestPart(value = "file") MultipartFile file, @RequestParam Long id) {
         return ResponseEntity.ok(service.salvarFoto(file, id));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<?> update(@RequestBody UserUpdate update, @PathVariable Long id) {
+        service.atualizarUsuario(id, update);
+        return ResponseEntity.ok(Map.of("message", "Usuário atualizado com sucesso"));
     }
 }

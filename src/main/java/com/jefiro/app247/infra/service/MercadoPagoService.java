@@ -9,6 +9,7 @@ import com.jefiro.app247.domain.model.dto.PagamentoResponse;
 import com.jefiro.app247.domain.model.enum_type.OrderStatus;
 import com.jefiro.app247.domain.model.enum_type.PagamentoStatus;
 import com.jefiro.app247.domain.model.enum_type.PagamentoTipo;
+import com.jefiro.app247.infra.event.PaymentEvent;
 import com.jefiro.app247.infra.repository.PagamentoRepository;
 import com.mercadopago.MercadoPagoConfig;
 import com.mercadopago.client.common.IdentificationRequest;
@@ -23,12 +24,13 @@ import com.mercadopago.resources.payment.Payment;
 import com.mercadopago.resources.preference.Preference;
 import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
+import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -43,10 +45,10 @@ public class MercadoPagoService {
     private PagamentoRepository pagamentoRepository;
     @Autowired
     OrderService orderService;
-
     @Autowired
-    private StringRedisTemplate redisTemplate;
-
+    StringRedisTemplate redisTemplate;
+    @Autowired
+    ApplicationEventPublisher publisher;
     @Value("${api.mercado.pago.access.token}")
     private String accessToken;
 
@@ -55,7 +57,7 @@ public class MercadoPagoService {
         MercadoPagoConfig.setAccessToken(accessToken);
     }
 
-    public PagamentoResponse criarPix(Order order) {
+    public PagamentoResponse criarPix(@NonNull Order order) {
 
         try {
 
@@ -257,22 +259,20 @@ public class MercadoPagoService {
                     default -> order.setStatus(OrderStatus.PENDING);
                 }
 
-                orderService.save(order);
+                order = orderService.save(order);
             }
 
             if (novoStatus == PagamentoStatus.APPROVED) {
 
                 pagamento.setPaidAt(LocalDateTime.now());
 
-                Map<String, String> event = new HashMap<>();
-                event.put("orderId", pagamento.getOrder().getOrderId());
-                event.put("paymentId", pagamento.getTransactionId());
-                event.put("status", "PAID");
+                assert order != null;
 
-                redisTemplate.convertAndSend(
-                        "payment_channel",
-                        new ObjectMapper().writeValueAsString(event)
-                );
+                PaymentEvent event = new PaymentEvent(order.getTerminalId(), order.getOrderId(), pagamento.getTransactionId(), "PAID");
+
+                publisher.publishEvent(event);
+
+//
             }
             pagamento.setUpdatedAt(LocalDateTime.now());
             pagamentoRepository.save(pagamento);

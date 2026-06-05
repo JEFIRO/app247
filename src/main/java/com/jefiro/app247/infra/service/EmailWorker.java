@@ -1,12 +1,14 @@
 package com.jefiro.app247.infra.service;
 
-import com.jefiro.app247.domain.model.dto.PasswordRecovery;
-import com.jefiro.app247.infra.event.UserCreatedEvent;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.jefiro.app247.domain.model.dto.ValidateCodeRequest;
+
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+
+import java.util.Map;
 
 @Service
 public class EmailWorker {
@@ -17,8 +19,8 @@ public class EmailWorker {
 
     @Scheduled(fixedDelay = 2000)
     public void processQueue() {
-        PasswordRecovery passwordRecovery =
-                (PasswordRecovery) redisTemplate.opsForList()
+        ValidateCodeRequest passwordRecovery =
+                (ValidateCodeRequest) redisTemplate.opsForList()
                         .rightPop("recovery_queue");
 
 
@@ -34,4 +36,25 @@ public class EmailWorker {
             e.printStackTrace();
         }
     }
+
+//    @Scheduled(fixedDelay = 2000)
+//    public void sender() {
+//
+//        String json = redisTemplate.opsForList().rightPop("valid_email_queue").toString();
+//
+//        if (json == null) return;
+//
+//        try {
+//            Map<String, String> validEmail =
+//                    objectMapper.readValue(json, new TypeReference<>() {
+//                    });
+//
+//            sender.enviarEmail(validEmail);
+//
+//        } catch (Exception e) {
+//
+//            redisTemplate.opsForList().leftPush("recovery_queue", json);
+//            e.printStackTrace();
+//        }
+//    }
 }
