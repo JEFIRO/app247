@@ -40,6 +40,15 @@ public class ProdutoService {
         return produtoRepository.save(produto);
     }
 
+    public List<Produto> salvarList(List<CreateProductDTO> produtoList) {
+        if (produtoList.isEmpty()) {
+            throw new RuntimeException("a lista não pode esta vazia");
+        }
+
+        List<Produto> produto = produtoList.stream().map(Produto::new).toList();
+        return produtoRepository.saveAll(produto);
+    }
+
     public Produto atualizar(Long id, CreateProductDTO dto, MultipartFile file) throws IOException {
 
         Produto produto = produtoRepository.findById(id)
@@ -115,14 +124,12 @@ public class ProdutoService {
     }
 
     public List<Produto> sync(String lastSync) {
-
         try {
             var data = LocalDateTime.parse(lastSync);
             return produtoRepository.findAllByUpdateAtAfter(data);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-
     }
 
     public List<Produto> findTop10ByOrderByCreatedAtDesc() {

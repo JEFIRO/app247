@@ -2,6 +2,8 @@ package com.jefiro.app247.infra.controller;
 
 import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.dto.UserRequestDTO;
+import com.jefiro.app247.domain.model.dto.ValidateCodeRequest;
+import com.jefiro.app247.domain.model.dto.ValidateEmailRequest;
 import com.jefiro.app247.domain.model.dto.auth.AuthDTO;
 import com.jefiro.app247.infra.repository.UserRepository;
 import com.jefiro.app247.infra.service.TokenService;
@@ -40,10 +42,16 @@ public class AuthController {
 
         return ResponseEntity.ok().build();
     }
-     @GetMapping("/send-code/{email}")
-    public ResponseEntity<?> sendCode(@PathVariable String email) {
-        service.sendCode(email);
 
+    @PostMapping("/send-code")
+    public ResponseEntity<?> sendCode(@RequestBody ValidateEmailRequest request) {
+        service.sendCode(request);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/validate-code")
+    public ResponseEntity<?> validateCode(@RequestBody ValidateEmailRequest request) {
+        service.verificarCode(request);
         return ResponseEntity.ok().build();
     }
 }

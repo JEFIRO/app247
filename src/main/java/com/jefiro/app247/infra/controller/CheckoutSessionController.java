@@ -21,7 +21,7 @@ public class CheckoutSessionController {
     private CarrinhoService carrinhoService;
 
     @GetMapping(value = "/carrinho")
-    public ResponseEntity<CheckoutSessionResponseDTO> getQrCode(@RequestParam String idCarrinho) {
+    public ResponseEntity<CheckoutSessionResponseDTO> getQrCode(@RequestParam String idCarrinho,@RequestParam String source) {
         Carrinho carrinho = carrinhoService.getById(idCarrinho);
 
         return ResponseEntity.ok(new CheckoutSessionResponseDTO(service.create(carrinho)));

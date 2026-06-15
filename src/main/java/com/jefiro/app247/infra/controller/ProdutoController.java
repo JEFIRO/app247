@@ -36,6 +36,11 @@ public class ProdutoController {
         return ResponseEntity.ok(produtoService.salvar(productDTO, file));
     }
 
+    @PostMapping("save-list")
+    public ResponseEntity<List<Produto>> saveProdutos(@RequestBody @Valid List<CreateProductDTO> productDTOS) {
+        return ResponseEntity.ok(produtoService.salvarList(productDTOS));
+    }
+
     @GetMapping
     public ResponseEntity<PageResponse<ProdutoListagemDTO>> listar(Pageable pageable) {
 

@@ -327,23 +327,34 @@ public class UserService {
         return condominioRepository.findById(id).orElseThrow(() -> new NoSuchElementException("Condominio não encontrado"));
     }
 
-    public void sendCode(String email) {
-        if (email.isEmpty()) {
-            throw new RuntimeException();
-        }
+    public void sendCode(ValidateEmailRequest email) {
         String code = String.valueOf(100000 + new Random().nextInt(900000));
 
-        var map = Map.of("code", code, "email", email);
+        email.setCode(code);
 
-        redisTemplate.opsForList().leftPush(
-                "valid_email_queue",
-                map
-        );
+        redisTemplate.opsForList().leftPush("email_validation_queue", email);
 
-        redisTemplate.opsForValue().set(
-                "valid_email:" + email,
-                map,
-                Duration.ofMinutes(15)
-        );
+        redisTemplate.opsForValue().set("email_validation_queue:" + email.getEmail(), code, Duration.ofMinutes(15));
+    }
+
+    public void verificarCode(ValidateEmailRequest emailValidate) {
+        try {
+            String recovery = (String) redisTemplate.opsForValue().get("email_validation_queue:" + emailValidate.getEmail());
+
+            if (recovery == null) {
+                throw new ExpiredCodeException("Código expirado");
+            }
+
+            if (!recovery.equals(emailValidate.getCode())) {
+                throw new InvalidCodeException("Código inválido");
+            }
+
+            redisTemplate.delete(
+                    "email_validation_queue:" + emailValidate.getEmail()
+            );
+
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }

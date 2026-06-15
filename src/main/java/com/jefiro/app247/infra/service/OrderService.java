@@ -41,6 +41,10 @@ public class OrderService {
 
         if (id_user != null) {
             User user = userService.getUser(id_user);
+
+            System.out.println("ID: " + user.getUserId());
+            System.out.println("UUID: " + user.getUuidUser());
+
             order.setUser(user);
         }
 

@@ -2,6 +2,7 @@ package com.jefiro.app247.domain.model;
 
 import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.enum_type.OrderStatus;
+import com.jefiro.app247.domain.model.enum_type.OriginRequest;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -28,7 +29,10 @@ public class Order {
     private Carrinho carrinho;
 
     @ManyToOne
-    @JoinColumn(name = "user_id")
+    @JoinColumn(
+            name = "user_id",
+            referencedColumnName = "uuid_user"
+    )
     private User user;
     private String terminalId;
 
@@ -37,6 +41,9 @@ public class Order {
     private BigDecimal desconto;
 
     private BigDecimal total;
+
+    @Enumerated(EnumType.STRING)
+    private OriginRequest originRequest;
 
     @Enumerated(EnumType.STRING)
     private OrderStatus status;

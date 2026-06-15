@@ -49,8 +49,9 @@ public class MercadoPagoService {
     StringRedisTemplate redisTemplate;
     @Autowired
     ApplicationEventPublisher publisher;
-    @Value("${api.mercado.pago.access.token}")
-    private String accessToken;
+    //@Value("${api.mercado.pago.access.token}")
+
+    private String accessToken = "TEST-1061534786289029-051023-8b91480cf85988cd160c53cc2c4c8f32-1553246015";
 
     @PostConstruct
     public void init() {
@@ -199,7 +200,8 @@ public class MercadoPagoService {
         Preference preference = client.create(request);
 
         Map<String, Object> response = new HashMap<>();
-        response.put("init_point", preference.getInitPoint());
+        //response.put("init_point", preference.getInitPoint());
+        response.put("init_point", preference.getSandboxInitPoint());
         response.put("id", preference.getId());
 
         return response;

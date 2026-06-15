@@ -56,6 +56,11 @@ public class UserController {
         return ResponseEntity.ok(service.getOrderByUser(userId, pageable));
     }
 
+    @GetMapping("/{userId}")
+    public ResponseEntity<?> getUser(@PathVariable Long userId) {
+        return ResponseEntity.ok(service.getUser(userId));
+    }
+
     @PostMapping(value = "foto", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> salvar(@RequestPart(value = "file") MultipartFile file, @RequestParam Long id) {
         return ResponseEntity.ok(service.salvarFoto(file, id));

@@ -3,6 +3,7 @@ package com.jefiro.app247.infra.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.jefiro.app247.domain.model.dto.ValidateCodeRequest;
 
+import com.jefiro.app247.domain.model.dto.ValidateEmailRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -37,24 +38,17 @@ public class EmailWorker {
         }
     }
 
-//    @Scheduled(fixedDelay = 2000)
-//    public void sender() {
-//
-//        String json = redisTemplate.opsForList().rightPop("valid_email_queue").toString();
-//
-//        if (json == null) return;
-//
-//        try {
-//            Map<String, String> validEmail =
-//                    objectMapper.readValue(json, new TypeReference<>() {
-//                    });
-//
-//            sender.enviarEmail(validEmail);
-//
-//        } catch (Exception e) {
-//
-//            redisTemplate.opsForList().leftPush("recovery_queue", json);
-//            e.printStackTrace();
-//        }
-//    }
+    @Scheduled(fixedDelay = 2000)
+    public void sender() {
+        ValidateEmailRequest emailRequest = (ValidateEmailRequest) redisTemplate.opsForList().rightPop("email_validation_queue");
+
+        if (emailRequest == null) return;
+
+        try {
+            sender.enviarEmail(emailRequest);
+        } catch (Exception e) {
+            redisTemplate.opsForList().leftPush("email_validation_queue", emailRequest);
+            e.printStackTrace();
+        }
+    }
 }

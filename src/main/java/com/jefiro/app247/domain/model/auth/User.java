@@ -30,6 +30,7 @@ public class User implements UserDetails {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long userId;
+    @Column(name = "uuid_user")
     private String uuidUser;
 
     private String nome;

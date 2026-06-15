@@ -2,6 +2,7 @@ package com.jefiro.app247.infra.service;
 
 import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.dto.ValidateCodeRequest;
+import com.jefiro.app247.domain.model.dto.ValidateEmailRequest;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.mail.SimpleMailMessage;
@@ -39,6 +40,35 @@ public class EmailService {
         helper.setSubject("Recuperação de senha - 24/7");
 
         helper.setText(gerarTemplate(passwordRecovery), true);
+
+        mailSender.send(message);
+    }
+
+    public void enviarEmail(User user) throws Exception {
+
+        MimeMessage message = mailSender.createMimeMessage();
+
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+        helper.setTo(user.getEmail());
+        helper.setSubject("Boas Vindas - 24/7");
+
+        helper.setText(gerarTemplateBoasVindas(user), true);
+
+        mailSender.send(message);
+    }
+
+    public void enviarEmail(ValidateEmailRequest validateEmailRequest) throws Exception {
+
+        MimeMessage message = mailSender.createMimeMessage();
+
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+        helper.setTo(validateEmailRequest.getEmail());
+
+        helper.setSubject("Valide seu email - 24/7");
+
+        helper.setText(gerarTemplateValidarEmail(validateEmailRequest), true);
 
         mailSender.send(message);
     }
@@ -164,20 +194,6 @@ public class EmailService {
                 </body>
                 </html>
                 """.replace("{{NOME}}", nome).replace("{{CODE}}", code).replace("{{EMAIL}}", email);
-    }
-
-    public void enviarEmail(User user) throws Exception {
-
-        MimeMessage message = mailSender.createMimeMessage();
-
-        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-        helper.setTo(user.getEmail());
-        helper.setSubject("Boas Vindas - 24/7");
-
-        helper.setText(gerarTemplateBoasVindas(user), true);
-
-        mailSender.send(message);
     }
 
     public String gerarTemplateBoasVindas(User usuario) {
@@ -340,21 +356,7 @@ public class EmailService {
                 """.replace("{{NOME}}", nome).replace("{{EMAIL}}", email).replace("{{DATA_CADASTRO}}", dataCadastro);
     }
 
-    public void enviarEmail(Map<String, String> user) throws Exception {
-
-        MimeMessage message = mailSender.createMimeMessage();
-
-        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-        helper.setTo(user.getOrDefault("email", ""));
-        helper.setSubject("Valide seu email - 24/7");
-
-//        helper.setText(gerarTemplateValidarEmail(), true);
-
-        mailSender.send(message);
-    }
-
-    public String gerarTemplateValidarEmail(String nome, String email, String code) {
+    public String gerarTemplateValidarEmail(ValidateEmailRequest email) {
         return """
                 <!DOCTYPE html>
                 <html lang="pt-BR">
@@ -470,8 +472,8 @@ public class EmailService {
                 </body>
                 </html>
                 """
-                .replace("{{NOME}}", nome)
-                .replace("{{CODE}}", code)
-                .replace("{{EMAIL}}", email);
+                .replace("{{NOME}}", email.getNome())
+                .replace("{{CODE}}", email.getCode())
+                .replace("{{EMAIL}}", email.getEmail());
     }
 }
