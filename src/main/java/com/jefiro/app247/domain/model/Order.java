@@ -22,19 +22,20 @@ public class Order {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private String orderId;
-
+    @Column(length = 36)
+    private String idOrder;
+    @ManyToOne
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
     @OneToOne
-    @JoinColumn(name = "carrinho_id", nullable = false)
+    @JoinColumn(name = "id_carrinho", nullable = false)
     private Carrinho carrinho;
 
     @ManyToOne
-    @JoinColumn(
-            name = "user_id",
-            referencedColumnName = "uuid_user"
-    )
+    @JoinColumn(name = "id_user")
     private User user;
-    private String terminalId;
+
+    private String idTerminal;
 
     private BigDecimal subtotal;
 
@@ -55,7 +56,7 @@ public class Order {
 
     private LocalDateTime paidAt;
 
-    @OneToOne(mappedBy = "order")
+    @OneToOne(mappedBy = "order", cascade = CascadeType.ALL)
     private Pagamento pagamento;
 
     @PrePersist
@@ -94,6 +95,7 @@ public class Order {
         this.status = OrderStatus.PENDING;
         this.carrinho = carrinho;
         this.total = carrinho.getSubtotal();
-        this.terminalId = carrinho.getTerminalId();
+        this.idTerminal = carrinho.getIdTerminal();
+        this.setOriginRequest(OriginRequest.TERMINAL);
     }
 }

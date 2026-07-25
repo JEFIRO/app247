@@ -50,24 +50,24 @@ public class UserController {
 
     @GetMapping("/{userId}/orders")
     public ResponseEntity<Page<OrderDTO>> getOrdersByUser(
-            @PathVariable Long userId,
+            @PathVariable String userId,
             Pageable pageable
     ) {
         return ResponseEntity.ok(service.getOrderByUser(userId, pageable));
     }
 
     @GetMapping("/{userId}")
-    public ResponseEntity<?> getUser(@PathVariable Long userId) {
+    public ResponseEntity<?> getUser(@PathVariable String userId) {
         return ResponseEntity.ok(service.getUser(userId));
     }
 
     @PostMapping(value = "foto", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<?> salvar(@RequestPart(value = "file") MultipartFile file, @RequestParam Long id) {
+    public ResponseEntity<?> salvar(@RequestPart(value = "file") MultipartFile file, @RequestParam String id) {
         return ResponseEntity.ok(service.salvarFoto(file, id));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> update(@RequestBody UserUpdate update, @PathVariable Long id) {
+    public ResponseEntity<?> update(@RequestBody UserUpdate update, @PathVariable String id) {
         service.atualizarUsuario(id, update);
         return ResponseEntity.ok(Map.of("message", "Usuário atualizado com sucesso"));
     }

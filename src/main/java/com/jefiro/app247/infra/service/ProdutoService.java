@@ -1,5 +1,7 @@
 package com.jefiro.app247.infra.service;
 
+import com.jefiro.app247.domain.model.Empresa;
+import com.jefiro.app247.domain.model.GrupoTributario;
 import com.jefiro.app247.domain.model.Produto;
 import com.jefiro.app247.domain.model.dto.CreateProductDTO;
 import com.jefiro.app247.domain.model.enum_type.ProdutoCategoria;
@@ -24,6 +26,8 @@ public class ProdutoService {
     private ProdutoRepository produtoRepository;
     @Autowired
     private FileStorageService fileStorageService;
+    @Autowired
+    EmpresaService empresaService;
 
     public Produto salvar(CreateProductDTO produtoDTO, MultipartFile file) throws IOException {
         if (produtoDTO == null) {
@@ -44,8 +48,12 @@ public class ProdutoService {
         if (produtoList.isEmpty()) {
             throw new RuntimeException("a lista não pode esta vazia");
         }
-
+        Empresa empresa = empresaService.getEmpresa("58453aae-b976-45f2-a2c1-7cb7502ac5f3");
         List<Produto> produto = produtoList.stream().map(Produto::new).toList();
+        produto.forEach(p -> {
+            p.setEmpresa(empresa);
+            p.setGrupoTributario(new GrupoTributario());
+        });
         return produtoRepository.saveAll(produto);
     }
 

@@ -8,37 +8,23 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public record UserResponseDTO(
-
-        String uuidUser,
-        Long userId,
-
+        String userId,
         String nome,
         String sobrenome,
-
         String email,
-
         String cpf,
         String telefone,
-
         LocalDate dataNascimento,
-
         String fotoPerfil,
-
         Boolean ativo,
         Boolean emailVerificado,
-
         RoleUser role,
-
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         LocalDateTime ultimoLogin
-
 ) {
-
     public UserResponseDTO(User user) {
-        this(
-                user.getUuidUser(),
-                user.getUserId(),
+        this(user.getIdUser(),
                 user.getNome(),
                 user.getSobrenome(),
                 user.getEmail(),

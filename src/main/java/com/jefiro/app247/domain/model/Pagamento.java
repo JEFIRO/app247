@@ -19,10 +19,13 @@ public class Pagamento {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private String pagamentoId;
-
+    @Column(length = 36)
+    private String idPagamento;
+    @ManyToOne
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
     @OneToOne
-    @JoinColumn(name = "order_id")
+    @JoinColumn(name = "id_order")
     private Order order;
 
     private BigDecimal valor;
@@ -65,5 +68,12 @@ public class Pagamento {
         this.transactionId = payment.getId().toString();
     }
 
-
+    public Pagamento(Order order) {
+        this.empresa = order.getEmpresa();
+        this.order = order;
+        this.valor = order.getTotal();
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+        this.status = PagamentoStatus.PENDING;
+    }
 }

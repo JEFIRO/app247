@@ -17,17 +17,9 @@ public class CorsConfig {
         CorsConfiguration config = new CorsConfiguration();
 
         config.setAllowCredentials(true);
-
-        // Libera qualquer origem
         config.setAllowedOriginPatterns(List.of("*"));
-
-        // Libera qualquer método
         config.setAllowedMethods(List.of("*"));
-
-        // Libera qualquer header
         config.setAllowedHeaders(List.of("*"));
-
-        // Expõe qualquer header
         config.setExposedHeaders(List.of("*"));
 
         UrlBasedCorsConfigurationSource source =

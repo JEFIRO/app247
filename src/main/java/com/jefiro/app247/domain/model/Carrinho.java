@@ -22,14 +22,18 @@ public class Carrinho {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private String carrinhoId;
+    @Column(length = 36)
+    private String idCarrinho;
+    @ManyToOne
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
 
     @OneToMany(mappedBy = "carrinho",
             cascade = CascadeType.ALL,
             orphanRemoval = true)
     private List<Item> items = new ArrayList<>();
 
-    private String terminalId;
+    private String idTerminal;
 
     @Enumerated(EnumType.STRING)
     private CarrinhoStatus status;

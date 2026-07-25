@@ -9,7 +9,7 @@ public record ItemResponseDTO(
 
         String itemId,
 
-        Long productId,
+        String productId,
 
         String barcode,
 
@@ -30,7 +30,7 @@ public record ItemResponseDTO(
 
 ) {
     public ItemResponseDTO(Item i) {
-        this(i.getItemId(), i.getProdutoId(), i.getBarcode(), i.getName(), i.getFoto(), i.getUnitPrice(), i.getQuantity(),
+        this(i.getIdItem(), i.getIdProduto(), i.getBarcode(), i.getName(), i.getFoto(), i.getUnitPrice(), i.getQuantity(),
                 i.getRequiresWeight(), i.getExpectedWeight(), i.getReceivedWeight(), i.getStatus());
     }
 }

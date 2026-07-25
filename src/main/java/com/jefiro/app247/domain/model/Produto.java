@@ -22,8 +22,15 @@ import java.time.LocalDateTime;
 @Table(name = "produto")
 public class Produto {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(length = 36)
+    private String idProduto;
+    @ManyToOne
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "grupo_tributario")
+    private GrupoTributario grupoTributario;
     @Column(unique = true)
     private String codigo;
     private String nome;
@@ -37,6 +44,7 @@ public class Produto {
     private String foto;
     private BigDecimal peso;
     private BigDecimal pesoTolerancia;
+
     private LocalDateTime createAt;
     private LocalDateTime updateAt;
     private boolean status;

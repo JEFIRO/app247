@@ -1,6 +1,7 @@
 package com.jefiro.app247.domain.model.auth;
 
 import com.jefiro.app247.domain.model.Condominio;
+import com.jefiro.app247.domain.model.Empresa;
 import com.jefiro.app247.domain.model.Order;
 import com.jefiro.app247.domain.model.dto.UserRequestDTO;
 import jakarta.persistence.*;
@@ -28,10 +29,13 @@ import java.util.UUID;
 public class User implements UserDetails {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long userId;
-    @Column(name = "uuid_user")
-    private String uuidUser;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(length = 36)
+    private String idUser;
+
+    @ManyToOne
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
 
     private String nome;
     private String sobrenome;
@@ -59,11 +63,10 @@ public class User implements UserDetails {
     private LocalDateTime ultimoLogin;
 
     @ManyToOne
-    @JoinColumn(name = "condominio_id")
+    @JoinColumn(name = "id_condominio")
     private Condominio condominio;
 
     public User(UserRequestDTO response) {
-        this.uuidUser = UUID.randomUUID().toString();
         this.nome = response.nome();
         this.sobrenome = response.sobrenome();
         this.email = response.email();
@@ -86,8 +89,8 @@ public class User implements UserDetails {
 
     @PrePersist
     public void prePersist() {
-        if (uuidUser == null) {
-            uuidUser = UUID.randomUUID().toString();
+        if (idUser == null) {
+            idUser = UUID.randomUUID().toString();
         }
         if (role == null) {
             role = RoleUser.USER;

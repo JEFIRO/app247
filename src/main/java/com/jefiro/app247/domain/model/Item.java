@@ -20,13 +20,16 @@ public class Item {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private String itemId;
-
+    @Column(length = 36)
+    private String idItem;
     @ManyToOne
-    @JoinColumn(name = "carrinho_id")
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
+    @ManyToOne
+    @JoinColumn(name = "id_carrinho")
     private Carrinho carrinho;
 
-    private Long produtoId;
+    private String idProduto;
 
     private String barcode;
 
@@ -48,7 +51,7 @@ public class Item {
 
     public Item(Produto produto, Integer quantity,
                 BigDecimal receivedWeight) {
-        this.produtoId = produto.getId();
+        this.idProduto = produto.getIdProduto();
         this.barcode = produto.getCodigo();
         this.name = produto.getNome();
         this.unitPrice = produto.getPreco();

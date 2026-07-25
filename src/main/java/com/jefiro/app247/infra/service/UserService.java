@@ -56,7 +56,7 @@ public class UserService {
     @Autowired
     CondominioRepository condominioRepository;
 
-    public User getUser(Long user) {
+    public User getUser(String user) {
         return repository.findById(user).orElseThrow(UserNotFoundException::new);
     }
 
@@ -207,7 +207,7 @@ public class UserService {
     }
 
 
-    public Page<OrderDTO> getOrderByUser(Long user_id, Pageable pageable) {
+    public Page<OrderDTO> getOrderByUser(String user_id, Pageable pageable) {
         return repository.findOrdersByUserId(user_id, pageable);
     }
 
@@ -232,18 +232,18 @@ public class UserService {
         }
     }
 
-    public User cadastrar(@Valid UserRequestDTO requestDTO, RoleUser roleUser) {
+    public User cadastrar(@Valid User requestDTO, RoleUser roleUser) {
         try {
-            if (repository.existsByCpf(requestDTO.cpf())) {
+            if (repository.existsByCpf(requestDTO.getCpf())) {
                 throw new DuplicateCpfException();
             }
 
-            User user = new User(requestDTO);
+            User user = requestDTO;
 
             user.setRole(roleUser);
 
             user.setSenha(
-                    passwordEncoder.encode(requestDTO.senha())
+                    passwordEncoder.encode(requestDTO.getSenha())
             );
             user = repository.save(user);
 
@@ -257,7 +257,7 @@ public class UserService {
     }
 
     @Transactional
-    public boolean salvarFoto(MultipartFile file, Long id) {
+    public boolean salvarFoto(MultipartFile file, String id) {
         try {
             User user = getUser(id);
 
@@ -288,7 +288,7 @@ public class UserService {
         }
     }
 
-    public void atualizarUsuario(Long id, UserUpdate request) {
+    public void atualizarUsuario(String id, UserUpdate request) {
 
         User user = getUser(id);
 

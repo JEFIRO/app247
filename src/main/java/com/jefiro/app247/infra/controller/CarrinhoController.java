@@ -27,9 +27,4 @@ public class CarrinhoController {
         return ResponseEntity.ok(new CarrinhoResponseDTO(service.save(request)));
     }
 
-//    @PostMapping
-//    public ResponseEntity<?> addCarinho(@RequestBody @Valid CarrinhoRequest request, @RequestParam @Valid @NotBlank String metodo) {
-//        return ResponseEntity.ok(new CarrinhoResponseDTO(service.save(request,metodo)));
-//    }
-
 }

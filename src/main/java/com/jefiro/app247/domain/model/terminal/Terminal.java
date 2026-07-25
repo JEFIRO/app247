@@ -1,6 +1,7 @@
 package com.jefiro.app247.domain.model.terminal;
 
 import com.jefiro.app247.domain.model.Condominio;
+import com.jefiro.app247.domain.model.Empresa;
 import com.jefiro.app247.domain.model.auth.Endereco;
 import com.jefiro.app247.domain.model.dto.TerminalRequest;
 import com.jefiro.app247.domain.model.enum_type.TerminalStatus;
@@ -22,9 +23,8 @@ import java.util.UUID;
 public class Terminal {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long terminal_id;
-    private String uuid_terminal;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private String idTerminal;
     private String nome;
     private String codigo;
     private Boolean ativo;
@@ -32,7 +32,7 @@ public class Terminal {
     private TerminalStatus status;
     private LocalDateTime lastPing;
     @ManyToOne
-    @JoinColumn(name = "condominio_id", nullable = false)
+    @JoinColumn(name = "id_condominio", nullable = false)
     private Condominio condominio;
 
     private String versaoSoftware;
@@ -42,9 +42,11 @@ public class Terminal {
 
     private LocalDateTime create_at;
     private LocalDateTime update_at;
+    @ManyToOne
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
 
     public Terminal(TerminalRequest request) {
-        this.uuid_terminal = UUID.randomUUID().toString();
         this.nome = request.nome();
         this.codigo = request.serialNumber();
         this.ativo = true;

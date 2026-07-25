@@ -12,7 +12,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Optional;
 
-public interface UserRepository extends JpaRepository<User, Long> {
+public interface UserRepository extends JpaRepository<User, String> {
     Optional<User> findByEmail(String email);
 
     UserDetails findByCpf(String cpf);
@@ -24,7 +24,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
   @Query("""
     SELECT new com.jefiro.app247.domain.model.dto.OrderDTO(
-        o.orderId,
+        o.idOrder,
         o.status,
         o.subtotal,
         o.desconto,
@@ -33,8 +33,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     )
     FROM User u
     JOIN u.orders o
-    WHERE u.userId = :userId
+    WHERE u.idUser = :userId
 """)
-Page<OrderDTO> findOrdersByUserId(@Param("userId") Long userId, Pageable pageable);
+Page<OrderDTO> findOrdersByUserId(@Param("userId") String userId, Pageable pageable);
 
 }

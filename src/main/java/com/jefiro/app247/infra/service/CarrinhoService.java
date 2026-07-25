@@ -28,7 +28,7 @@ public class CarrinhoService {
         Carrinho carrinho = new Carrinho();
         List<Item> items = new ArrayList<>();
         BigDecimal sub = BigDecimal.ZERO;
-        carrinho.setTerminalId(request.terminalId());
+        carrinho.setIdTerminal(request.terminalId());
 
         for (ItemRequest i : request.items()) {
             Produto produto = produtoService.buscarPorId(i.productId());
@@ -36,8 +36,7 @@ public class CarrinhoService {
             item.setCarrinho(carrinho);
             items.add(item);
             sub = sub.add(
-                    produto.getPreco()
-                            .multiply(BigDecimal.valueOf(item.getQuantity()))
+                    produto.getPreco().multiply(BigDecimal.valueOf(item.getQuantity()))
             );
         }
 

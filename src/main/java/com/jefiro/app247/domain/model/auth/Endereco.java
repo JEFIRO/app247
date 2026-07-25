@@ -1,5 +1,6 @@
 package com.jefiro.app247.domain.model.auth;
 
+import com.jefiro.app247.domain.model.Empresa;
 import com.jefiro.app247.domain.model.dto.EnderecoDTO;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -15,8 +16,9 @@ import lombok.NoArgsConstructor;
 public class Endereco {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(length = 36)
+    private String idEndereco;
 
     private String rua;
     private String numero;
@@ -25,6 +27,9 @@ public class Endereco {
     private String cidade;
     private String estado;
     private String cep;
+    @ManyToOne
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
 
     public Endereco(EnderecoDTO enderecoDTO) {
         this.rua = enderecoDTO.rua();

@@ -1,7 +1,9 @@
 package com.jefiro.app247.infra.websocket;
 
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jefiro.app247.infra.event.PaymentEvent;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -16,7 +18,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class PaymentWebSocketHandler extends TextWebSocketHandler {
-
+    @Autowired
+    private ObjectMapper objectMapper;
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
 
     @Override
@@ -37,7 +40,7 @@ public class PaymentWebSocketHandler extends TextWebSocketHandler {
         sessions.values().remove(session);
     }
 
-    @Async
+
     @EventListener
     public void sendToTerminal(PaymentEvent event) throws IOException {
 
@@ -45,7 +48,11 @@ public class PaymentWebSocketHandler extends TextWebSocketHandler {
 
         if (session != null && session.isOpen()) {
 
-            session.sendMessage(new TextMessage(event.toString()));
+            String json = objectMapper.writeValueAsString(event);
+
+            System.out.println("Enviando: " + json);
+
+            session.sendMessage(new TextMessage(json));
         }
     }
 }

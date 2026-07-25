@@ -25,6 +25,6 @@ public record CarrinhoResponseDTO(
 
 ) {
     public CarrinhoResponseDTO(Carrinho car) {
-        this(car.getCarrinhoId(), car.getTerminalId(), car.getStatus(), car.getSubtotal(), car.getItems().stream().map(ItemResponseDTO::new).toList(), car.getCreatedAt(), car.getUpdatedAt());
+        this(car.getIdCarrinho(), car.getIdTerminal(), car.getStatus(), car.getSubtotal(), car.getItems().stream().map(ItemResponseDTO::new).toList(), car.getCreatedAt(), car.getUpdatedAt());
     }
 }

@@ -7,7 +7,7 @@ import com.jefiro.app247.domain.model.enum_type.UnidadeMedida;
 import java.math.BigDecimal;
 
 public record ProdutoListagemDTO(
-        Long id,
+        String id,
         String codigo,
         String nome,
         BigDecimal preco,
@@ -19,7 +19,7 @@ public record ProdutoListagemDTO(
 ) {
     public ProdutoListagemDTO(Produto produto) {
         this(
-                produto.getId(),
+                produto.getIdProduto(),
                 produto.getCodigo(),
                 produto.getNome(),
                 produto.getPreco(),

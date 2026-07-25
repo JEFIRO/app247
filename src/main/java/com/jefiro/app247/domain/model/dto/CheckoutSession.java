@@ -27,8 +27,8 @@ public class CheckoutSession {
 
     public CheckoutSession(Carrinho carrinho) {
         this.sessionId = UUID.randomUUID().toString();
-        this.cartId = carrinho.getCarrinhoId();
-        this.terminalId = carrinho.getTerminalId();
+        this.cartId = carrinho.getIdCarrinho();
+        this.terminalId = carrinho.getIdTerminal();
         this.status = SessionStatus.OPEN;
 
         this.createdAt = Instant.now();

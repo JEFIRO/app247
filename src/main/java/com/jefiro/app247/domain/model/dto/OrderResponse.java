@@ -16,6 +16,6 @@ public record OrderResponse(
         LocalDateTime createdAt
 ) {
     public OrderResponse(Order order) {
-        this(order.getOrderId(), order.getCarrinho().getCarrinhoId(), order.getTotal(), order.getStatus(), order.getCreatedAt());
+        this(order.getIdOrder(), order.getCarrinho().getIdCarrinho(), order.getTotal(), order.getStatus(), order.getCreatedAt());
     }
 }

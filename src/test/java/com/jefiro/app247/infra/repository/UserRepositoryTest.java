@@ -41,7 +41,7 @@ class UserRepositoryTest {
     @DisplayName("Pagar os Orders do usuário com sucesso")
     void findOrdersByUserIdSuccess() {
         User user = createUser();
-        userRepository.findOrdersByUserId(user.getUserId(), Pageable.ofSize(1));
+        userRepository.findOrdersByUserId(user.getIdUser(), Pageable.ofSize(1));
 
     }
 

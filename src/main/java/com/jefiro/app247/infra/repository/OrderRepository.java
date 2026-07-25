@@ -11,7 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 public interface OrderRepository extends JpaRepository<Order, String> {
     @Query("""
                 SELECT new com.jefiro.app247.domain.model.dto.OrderDTO(
-                    o.orderId,
+                    o.idOrder,
                     o.status,
                     o.subtotal,
                     o.desconto,
@@ -19,7 +19,7 @@ public interface OrderRepository extends JpaRepository<Order, String> {
                     o.createdAt
                 )
                 FROM Order o
-                WHERE o.user.userId = :userId
+                WHERE o.user.idUser = :userId
             """)
     Page<OrderDTO> findOrdersByUserId(@Param("userId") Long userId, Pageable pageable);
 }

@@ -23,17 +23,18 @@ import java.util.UUID;
 public class Condominio {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long condominioId;
-
-    private String uuidCondominio;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(length = 36)
+    private String idCondominio;
 
     private String nome;
     private String cnpj;
-
+    @ManyToOne
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
 
     @OneToOne(cascade = CascadeType.ALL)
-    @JoinColumn(name = "endereco_id")
+    @JoinColumn(name = "id_endereco")
     private Endereco endereco;
 
     private Boolean ativo;
@@ -52,7 +53,6 @@ public class Condominio {
     private List<Terminal> terminais = new ArrayList<>();
 
     public Condominio(CondominioRequest request, Endereco endereco) {
-        this.uuidCondominio = UUID.randomUUID().toString();
         this.nome = request.nome();
         this.cnpj = request.cnpj();
         this.endereco = endereco;
