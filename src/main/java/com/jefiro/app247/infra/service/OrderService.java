@@ -6,9 +6,11 @@ import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.dto.OrderDTO;
 import com.jefiro.app247.domain.model.enum_type.CarrinhoStatus;
 import com.jefiro.app247.domain.model.enum_type.OriginRequest;
+import com.jefiro.app247.infra.event.MercadoPagoCobrancaEvent;
 import com.jefiro.app247.infra.repository.OrderRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,8 @@ public class OrderService {
     CarrinhoService carrinhoService;
     @Autowired
     UserService userService;
+    @Autowired
+    ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public Order createOrder(String carrinhoId, String id_user) {
@@ -52,18 +56,18 @@ public class OrderService {
     }
 
     @Transactional
-    public Order criarCobranca(Carrinho carrinho) {
-        if (carrinho.getStatus() != CarrinhoStatus.OPEN) {
-            throw new RuntimeException("Carrinho já finalizado");
+    public void criarCobranca(Carrinho carrinho) {
+        try {
+            Order order = new Order(carrinho);
+            order.setOriginRequest(OriginRequest.TERMINAL);
+
+            order = repository.save(order);
+
+            eventPublisher.publishEvent(new MercadoPagoCobrancaEvent(order));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
 
-        carrinho.setStatus(CarrinhoStatus.READY_FOR_PAYMENT);
-        carrinhoService.save(carrinho);
-
-        Order order = new Order(carrinho);
-        order.setOriginRequest(OriginRequest.TERMINAL);
-
-        return repository.save(order);
     }
 
 

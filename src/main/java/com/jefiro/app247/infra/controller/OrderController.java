@@ -19,12 +19,12 @@ public class OrderController {
 
     @GetMapping("/finalizar")
     public ResponseEntity<?> order(@RequestParam String carrinho_id) {
-        return ResponseEntity.ok(new OrderResponse(service.createOrder(carrinho_id, null)));
+        return ResponseEntity.ok(service.createOrder(carrinho_id, null));
     }
 
     @GetMapping()
     public ResponseEntity<?> getOrder(@RequestParam String carrinho_id) {
-        return ResponseEntity.ok(new OrderResponse(service.getOrder(carrinho_id)));
+        return ResponseEntity.ok(service.getOrder(carrinho_id));
     }
 
 

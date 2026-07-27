@@ -1,40 +1,39 @@
 package com.jefiro.app247.infra.controller;
 
-import com.jefiro.app247.domain.model.dto.mercadopago.PreferenceReturn;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
 @RestController
-@RequestMapping("/webhook/mercadopago")
+@RequestMapping("/webhook")
 public class MercadoPagoWebhookController {
 
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
+    @Autowired
+    ObjectMapper objectMapper;
 
-    @PostMapping
-    public ResponseEntity<String> receive(@RequestBody Map<String, Object> body) {
-        
+
+    @PostMapping("/mercadopago")
+    public ResponseEntity<String> receive(@RequestBody Map<String, Object> body) throws JsonProcessingException {
         Map<String, Object> data = (Map<String, Object>) body.get("data");
-        System.out.println(data);
-        String paymentId = String.valueOf(data.get("id"));
 
-        redisTemplate.opsForList().leftPush("mp_queue", paymentId);
+        if (data == null) {
+            return ResponseEntity.badRequest().body("Payload sem campo 'data'");
+        }
+
+        String bodyJson = objectMapper.writeValueAsString(body);
+        System.out.println("body");
+        redisTemplate.opsForList().leftPush("mp_queue", bodyJson);
 
         return ResponseEntity.ok("ENFILEIRADO");
     }
-//       @PostMapping("checkout")
-//    public ResponseEntity<String> receive(@RequestBody PreferenceReturn preferenceReturn, @RequestParam String status,@RequestParam String cliente) {
-//
-//        Map<String, Object> data = (Map<String, Object>) body.get("data");
-//        String paymentId = String.valueOf(data.get("id"));
-//
-//        redisTemplate.opsForList().leftPush("mp_queue", paymentId);
-//
-//        return ResponseEntity.ok("ENFILEIRADO");
-//    }
-
 }

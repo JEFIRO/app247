@@ -4,5 +4,5 @@ public enum PagamentoTipo {
     PIX,
     CREDIT_CARD,
     DEBIT_CARD,
-    CASH
+    ALIMENT_CARD
 }

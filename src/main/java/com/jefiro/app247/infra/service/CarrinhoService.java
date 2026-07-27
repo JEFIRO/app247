@@ -1,6 +1,7 @@
 package com.jefiro.app247.infra.service;
 
 import com.jefiro.app247.domain.model.Carrinho;
+import com.jefiro.app247.domain.model.Empresa;
 import com.jefiro.app247.domain.model.Item;
 import com.jefiro.app247.domain.model.Produto;
 import com.jefiro.app247.domain.model.dto.CarrinhoRequest;
@@ -29,11 +30,13 @@ public class CarrinhoService {
         List<Item> items = new ArrayList<>();
         BigDecimal sub = BigDecimal.ZERO;
         carrinho.setIdTerminal(request.terminalId());
-
+        Empresa empresa = null;
         for (ItemRequest i : request.items()) {
             Produto produto = produtoService.buscarPorId(i.productId());
+            empresa = produto.getEmpresa();
             Item item = new Item(produto, i.quantity(), i.receivedWeight());
             item.setCarrinho(carrinho);
+            item.setEmpresa(produto.getEmpresa());
             items.add(item);
             sub = sub.add(
                     produto.getPreco().multiply(BigDecimal.valueOf(item.getQuantity()))
@@ -42,7 +45,7 @@ public class CarrinhoService {
 
         carrinho.setSubtotal(sub);
         carrinho.setItems(items);
-
+        carrinho.setEmpresa(empresa);
         carrinho = repository.save(carrinho);
 
         return carrinho;

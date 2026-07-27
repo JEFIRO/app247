@@ -1,8 +1,9 @@
 package com.jefiro.app247.domain.model;
 
 import com.jefiro.app247.domain.model.auth.User;
-import com.jefiro.app247.domain.model.enum_type.OrderStatus;
+import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
 import com.jefiro.app247.domain.model.enum_type.OriginRequest;
+import com.jefiro.app247.domain.model.enum_type.order.StatusDetail;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -30,7 +31,6 @@ public class Order {
     @OneToOne
     @JoinColumn(name = "id_carrinho", nullable = false)
     private Carrinho carrinho;
-
     @ManyToOne
     @JoinColumn(name = "id_user")
     private User user;
@@ -59,6 +59,27 @@ public class Order {
     @OneToOne(mappedBy = "order", cascade = CascadeType.ALL)
     private Pagamento pagamento;
 
+    @Column(name = "mp_order_id")
+    private String mpOrderId;
+
+    @Column(name = "mp_type")
+    private String mpType;
+
+    @Column(name = "mp_user_id")
+    private String mpUserId;
+
+    @Column(name = "mp_status")
+    @Enumerated(EnumType.STRING)
+    private OrderStatus mpStatus;
+
+    @Column(name = "mp_status_detail")
+    @Enumerated(EnumType.STRING)
+    private StatusDetail mpStatusDetail;
+
+    @Column(name = "mp_terminal_id")
+    private String mpTerminalId;
+
+
     @PrePersist
     public void prePersist() {
         createdAt = LocalDateTime.now();
@@ -86,14 +107,11 @@ public class Order {
         this.user = user;
         this.subtotal = carrinho.getSubtotal();
         this.total = carrinho.getSubtotal();
-        this.status = OrderStatus.PENDING;
-        this.createdAt = LocalDateTime.now();
     }
 
     public Order(Carrinho carrinho) {
-        this.createdAt = LocalDateTime.now();
-        this.status = OrderStatus.PENDING;
         this.carrinho = carrinho;
+        this.empresa = carrinho.getEmpresa();
         this.total = carrinho.getSubtotal();
         this.idTerminal = carrinho.getIdTerminal();
         this.setOriginRequest(OriginRequest.TERMINAL);

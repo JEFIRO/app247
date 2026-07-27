@@ -11,8 +11,8 @@ create table produto
     categoria        varchar(55),
     quantidade       integer            not null,
     unidade_medida   varchar(50),
-    grupo_tributario varchar(36)        not null,
-    ncm              varchar(36)        not null,
+    grupo_tributario varchar(36),
+    ncm              varchar(36),
     create_at        timestamp default current_timestamp,
     update_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ON UPDATE CURRENT_TIMESTAMP,

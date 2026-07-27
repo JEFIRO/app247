@@ -1,11 +1,14 @@
 package com.jefiro.app247.domain.model;
 
+import com.jefiro.app247.domain.model.dto.OrderResponse;
+import com.jefiro.app247.domain.model.enum_type.PagamentoSource;
 import com.jefiro.app247.domain.model.enum_type.PagamentoStatus;
 import com.jefiro.app247.domain.model.enum_type.PagamentoTipo;
 import com.mercadopago.resources.payment.Payment;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -15,6 +18,7 @@ import java.time.LocalDateTime;
 
 @Table(name = "pagamento")
 @Entity
+@ToString
 public class Pagamento {
 
     @Id
@@ -35,6 +39,12 @@ public class Pagamento {
 
     @Enumerated(EnumType.STRING)
     private PagamentoStatus status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PagamentoSource sourcePaiment;
+
+    private Integer installments;
 
     private String transactionId;
 
@@ -68,12 +78,14 @@ public class Pagamento {
         this.transactionId = payment.getId().toString();
     }
 
-    public Pagamento(Order order) {
+     public Pagamento(Order order, OrderResponse response) {
+        this.sourcePaiment = PagamentoSource.TERMINAL;
         this.empresa = order.getEmpresa();
         this.order = order;
         this.valor = order.getTotal();
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
         this.status = PagamentoStatus.PENDING;
+        this.transactionId = response.transactions().payments().get(0).id();
     }
 }

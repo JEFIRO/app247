@@ -1,21 +1,120 @@
 package com.jefiro.app247.domain.model.dto;
 
-import com.jefiro.app247.domain.model.Carrinho;
-import com.jefiro.app247.domain.model.Order;
-import com.jefiro.app247.domain.model.enum_type.OrderStatus;
-import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
+import com.jefiro.app247.domain.model.enum_type.order.StatusDetail;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.util.List;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record OrderResponse(
-        String orderId,
-        String carrinho_id,
-        BigDecimal total,
+        String id,
+
+        String type,
+
+        @JsonProperty("user_id")
+        String userId,
+
+        @JsonProperty("external_reference")
+        String externalReference,
+
+        String description,
+
+        @JsonProperty("expiration_time")
+        String expirationTime,
+
+        @JsonProperty("processing_mode")
+        String processingMode,
+
+        @JsonProperty("country_code")
+        String countryCode,
+
+        @JsonProperty("integration_data")
+        IntegrationData integrationData,
+
         OrderStatus status,
-        LocalDateTime createdAt
+
+        @JsonProperty("status_detail")
+        StatusDetail statusDetail,
+
+        @JsonProperty("created_date")
+        String createdDate,
+
+        @JsonProperty("last_updated_date")
+        String lastUpdatedDate,
+
+        Config config,
+
+        Transactions transactions
 ) {
-    public OrderResponse(Order order) {
-        this(order.getIdOrder(), order.getCarrinho().getIdCarrinho(), order.getTotal(), order.getStatus(), order.getCreatedAt());
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record IntegrationData(
+            @JsonProperty("application_id")
+            String applicationId,
+
+            @JsonProperty("platform_id")
+            String platformId,
+
+            @JsonProperty("integrator_id")
+            String integratorId,
+
+            Sponsor sponsor
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Sponsor(
+            String id
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Config(
+            Point point,
+
+            @JsonProperty("payment_method")
+            PaymentMethod paymentMethod
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Point(
+            @JsonProperty("terminal_id")
+            String terminalId,
+
+            @JsonProperty("print_on_terminal")
+            String printOnTerminal
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record PaymentMethod(
+            @JsonProperty("default_type")
+            String defaultType,
+
+            @JsonProperty("default_installments")
+            String defaultInstallments,
+
+            @JsonProperty("installments_cost")
+            String installmentsCost
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Transactions(
+            List<Payment> payments
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Payment(
+            String id,
+
+            String amount,
+
+            String status
+    ) {
     }
 }

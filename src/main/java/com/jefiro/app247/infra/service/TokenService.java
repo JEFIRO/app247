@@ -20,10 +20,9 @@ public class TokenService {
         try {
             Algorithm algorithm = Algorithm.HMAC256(senha);
             String token = JWT.create()
+                    .withSubject(user.getCpf())
                     .withClaim("userId", user.getIdUser())
                     .withClaim("empresaId", user.getEmpresa().getId())
-                    .withSubject("24/7")
-                    .withSubject(user.getCpf())
                     .withExpiresAt(genereteExpirationDate())
                     .sign(algorithm);
             return token;
@@ -36,7 +35,6 @@ public class TokenService {
         try {
             Algorithm algorithm = Algorithm.HMAC256(senha);
             return JWT.require(algorithm)
-                    .withSubject("24/7")
                     .build()
                     .verify(token)
                     .getSubject();

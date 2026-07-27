@@ -69,13 +69,13 @@ public class ProdutoController {
     }
 
     @GetMapping("/id")
-    public ResponseEntity<Produto> buscarPorCodigo(@RequestParam Long id) {
+    public ResponseEntity<Produto> buscarPorid(@RequestParam String id) {
         return ResponseEntity.ok(produtoService.buscarPorId(id));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<Produto> atualizarProduto(
-            @PathVariable Long id,
+            @PathVariable String id,
             @RequestPart("data") CreateProductDTO dto,
             @RequestPart(value = "file", required = false) MultipartFile file
     ) throws IOException {

@@ -1,6 +1,8 @@
 package com.jefiro.app247.infra.security;
 
+import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.infra.repository.UserRepository;
+import com.jefiro.app247.infra.service.EmpresaContext;
 import com.jefiro.app247.infra.service.TokenService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -24,25 +26,44 @@ public class SecurityFilter extends OncePerRequestFilter {
     UserRepository repository;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain)
+            throws ServletException, IOException {
 
         var token = recoverToken(request);
+        System.out.println("Token: " + token);
+        try {
 
-        if (token != null) {
+            if (token != null) {
 
-            var subject = tokenService.validate(token);
+                var subject = tokenService.validate(token);
+                System.out.println(subject);
+                UserDetails user = repository.findByCpf(subject);
+                System.out.println(user);
+                User ur = (User) user;
+                if (user != null) {
 
-            UserDetails user = repository.findByCpf(subject);
+                    EmpresaContext.set(ur.getEmpresa().getId());
 
-            if (user != null) {
+                    System.out.println("Empresa: " + EmpresaContext.get());
 
-                var authentication = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+                    var authentication =
+                            new UsernamePasswordAuthenticationToken(
+                                    user,
+                                    null,
+                                    user.getAuthorities());
 
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                    SecurityContextHolder.getContext()
+                            .setAuthentication(authentication);
+                }
             }
-        }
 
-        filterChain.doFilter(request, response);
+            filterChain.doFilter(request, response);
+
+        } finally {
+            EmpresaContext.clear();
+        }
     }
 
 

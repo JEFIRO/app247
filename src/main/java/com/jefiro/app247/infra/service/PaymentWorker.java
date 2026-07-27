@@ -12,20 +12,22 @@ public class PaymentWorker {
     private RedisTemplate<String, String> redisTemplate;
 
     @Autowired
-    private MercadoPagoService mercadoPagoService;
+    private PagamentoService pagamentoService;
 
-    @Scheduled(fixedDelay = 2000) // roda a cada 2s
+    @Scheduled(fixedDelay = 2000)
     public void processQueue() {
-
-        String paymentId = redisTemplate.opsForList()
-                .rightPop("mp_queue");
-
-        if (paymentId == null) return;
+        String json = redisTemplate.opsForList().rightPop("mp_queue");
+        if (json == null || json.isBlank()) {
+            return; 
+        }
 
         try {
-            mercadoPagoService.atualizarPagamento(paymentId);
+            pagamentoService.atualizarPagamento(json);
         } catch (Exception e) {
-            redisTemplate.opsForList().leftPush("mp_queue", paymentId);
+            e.printStackTrace();
+            System.out.println("Mensagem: " + e.getMessage());
+            System.out.println("Classe: " + e.getClass().getName());
+            redisTemplate.opsForList().leftPush("mp_queue", json);
         }
     }
 }

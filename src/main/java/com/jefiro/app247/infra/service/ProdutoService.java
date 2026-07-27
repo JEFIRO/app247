@@ -48,16 +48,15 @@ public class ProdutoService {
         if (produtoList.isEmpty()) {
             throw new RuntimeException("a lista não pode esta vazia");
         }
-        Empresa empresa = empresaService.getEmpresa("58453aae-b976-45f2-a2c1-7cb7502ac5f3");
+        Empresa empresa = empresaService.getEmpresa(EmpresaContext.get());
         List<Produto> produto = produtoList.stream().map(Produto::new).toList();
-        produto.forEach(p -> {
-            p.setEmpresa(empresa);
-            p.setGrupoTributario(new GrupoTributario());
-        });
+        produto.forEach(p ->
+                p.setEmpresa(empresa)
+        );
         return produtoRepository.saveAll(produto);
     }
 
-    public Produto atualizar(Long id, CreateProductDTO dto, MultipartFile file) throws IOException {
+    public Produto atualizar(String id, CreateProductDTO dto, MultipartFile file) throws IOException {
 
         Produto produto = produtoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Produto não encontrado"));
@@ -127,7 +126,7 @@ public class ProdutoService {
         return produtoRepository.findByCodigo(codigo).orElseThrow(() -> new RuntimeException("Produto não encontrado"));
     }
 
-    public Produto buscarPorId(Long id) {
+    public Produto buscarPorId(String id) {
         return produtoRepository.findById(id).orElseThrow(() -> new RuntimeException("Produto não existe"));
     }
 

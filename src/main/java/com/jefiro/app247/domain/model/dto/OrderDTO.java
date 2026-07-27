@@ -1,6 +1,6 @@
 package com.jefiro.app247.domain.model.dto;
 
-import com.jefiro.app247.domain.model.enum_type.OrderStatus;
+import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

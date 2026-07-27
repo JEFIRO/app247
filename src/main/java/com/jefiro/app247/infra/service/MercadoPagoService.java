@@ -5,8 +5,7 @@ import com.jefiro.app247.domain.model.Pagamento;
 import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.dto.PagamentoResponse;
 import com.jefiro.app247.domain.model.dto.mercadopago.PreferenceReturn;
-import com.jefiro.app247.domain.model.enum_type.OrderStatus;
-import com.jefiro.app247.domain.model.enum_type.PagamentoStatus;
+import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
 import com.jefiro.app247.domain.model.enum_type.PagamentoTipo;
 import com.jefiro.app247.infra.event.PaymentEvent;
 import com.jefiro.app247.infra.repository.PagamentoRepository;
@@ -22,14 +21,12 @@ import com.mercadopago.exceptions.MPException;
 import com.mercadopago.resources.payment.Payment;
 import com.mercadopago.resources.preference.Preference;
 import jakarta.annotation.PostConstruct;
-import jakarta.transaction.Transactional;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -191,80 +188,80 @@ public class MercadoPagoService {
     }
 
 
-    @Transactional
-    public void atualizarPagamento(String paymentId) {
-
-        try {
-
-            PaymentClient client = new PaymentClient();
-            Payment payment = client.get(Long.parseLong(paymentId));
-
-            Pagamento pagamento = pagamentoRepository
-                    .findByTransactionId(paymentId)
-                    .orElseThrow(() -> new RuntimeException("Pagamento não encontrado"));
-
-            if (pagamento.getStatus() == PagamentoStatus.APPROVED) {
-                return;
-            }
-
-            String status = payment.getStatus();
-
-            PagamentoStatus novoStatus = switch (status) {
-                case "approved" -> PagamentoStatus.APPROVED;
-                case "rejected" -> PagamentoStatus.DENIED;
-                case "cancelled" -> PagamentoStatus.CANCELLED;
-                case "in_process" -> PagamentoStatus.PROCESSING;
-                default -> PagamentoStatus.PENDING;
-            };
-
-            if (pagamento.getStatus() == novoStatus) {
-                return;
-            }
-
-            pagamento.setStatus(novoStatus);
-            pagamento.setUpdatedAt(LocalDateTime.now());
-
-            pagamento.setPaymentMethodId(payment.getPaymentMethodId());
-            pagamento.setStatusDetail(payment.getStatusDetail());
-            pagamento.setTransactionId(payment.getId().toString());
-
-            if (payment.getTransactionDetails() != null) {
-                pagamento.setNsu(payment.getTransactionDetails().getExternalResourceUrl());
-                pagamento.setAuthorizationCode(payment.getAuthorizationCode());
-            }
-
-            Order order = pagamento.getOrder();
-
-            if (order != null) {
-
-                switch (novoStatus) {
-                    case APPROVED -> order.setStatus(OrderStatus.PAID);
-                    case PROCESSING -> order.setStatus(OrderStatus.PROCESSING);
-                    case CANCELLED, DENIED -> order.setStatus(OrderStatus.CANCELLED);
-                    default -> order.setStatus(OrderStatus.PENDING);
-                }
-
-                order = orderService.save(order);
-            }
-
-            if (novoStatus == PagamentoStatus.APPROVED) {
-
-                pagamento.setPaidAt(LocalDateTime.now());
-
-                assert order != null;
-
-                PaymentEvent event = new PaymentEvent(order.getIdTerminal(), order.getIdOrder(), pagamento.getTransactionId(), "PAID");
-
-                publisher.publishEvent(event);
-
-            }
-            pagamento.setUpdatedAt(LocalDateTime.now());
-            pagamentoRepository.save(pagamento);
-
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
+//    @Transactional
+//    public void atualizarPagamento(String paymentId) {
+//
+//        try {
+//
+//            PaymentClient client = new PaymentClient();
+//            Payment payment = client.get(Long.parseLong(paymentId));
+//
+//            Pagamento pagamento = pagamentoRepository
+//                    .findByTransactionId(paymentId)
+//                    .orElseThrow(() -> new RuntimeException("Pagamento não encontrado"));
+//
+//            if (pagamento.getStatus() == PagamentoStatus.APPROVED) {
+//                return;
+//            }
+//
+//            String status = payment.getStatus();
+//
+//            PagamentoStatus novoStatus = switch (status) {
+//                case "approved" -> PagamentoStatus.APPROVED;
+//                case "rejected" -> PagamentoStatus.DENIED;
+//                case "cancelled" -> PagamentoStatus.CANCELLED;
+//                case "in_process" -> PagamentoStatus.PROCESSING;
+//                default -> PagamentoStatus.PENDING;
+//            };
+//
+//            if (pagamento.getStatus() == novoStatus) {
+//                return;
+//            }
+//
+//            pagamento.setStatus(novoStatus);
+//            pagamento.setUpdatedAt(LocalDateTime.now());
+//
+//            pagamento.setPaymentMethodId(payment.getPaymentMethodId());
+//            pagamento.setStatusDetail(payment.getStatusDetail());
+//            pagamento.setTransactionId(payment.getId().toString());
+//
+//            if (payment.getTransactionDetails() != null) {
+//                pagamento.setNsu(payment.getTransactionDetails().getExternalResourceUrl());
+//                pagamento.setAuthorizationCode(payment.getAuthorizationCode());
+//            }
+//
+//            Order order = pagamento.getOrder();
+//
+//            if (order != null) {
+//
+//                switch (novoStatus) {
+//                    case APPROVED -> order.setStatus(OrderStatus.PAID);
+//                    case PROCESSING -> order.setStatus(OrderStatus.PROCESSING);
+//                    case CANCELLED, DENIED -> order.setStatus(OrderStatus.CANCELLED);
+//                    default -> order.setStatus(OrderStatus.PENDING);
+//                }
+//
+//                order = orderService.save(order);
+//            }
+//
+//            if (novoStatus == PagamentoStatus.APPROVED) {
+//
+//                pagamento.setPaidAt(LocalDateTime.now());
+//
+//                assert order != null;
+//
+//                PaymentEvent event = new PaymentEvent(order.getIdTerminal(), order.getIdOrder(), pagamento.getTransactionId(), "PAID");
+//
+//                publisher.publishEvent(event);
+//
+//            }
+//            pagamento.setUpdatedAt(LocalDateTime.now());
+//            pagamentoRepository.save(pagamento);
+//
+//        } catch (Exception e) {
+//            throw new RuntimeException(e);
+//        }
+//    }
 
     public void sendEvent() {
         PaymentEvent event = new PaymentEvent("095a0e6c-47cf-4d94-a154-f8b46f1846dc", "c5d08227-e92d-42b5-ad04-7c8bcf7a0d78", "164173963104", "PAID");
