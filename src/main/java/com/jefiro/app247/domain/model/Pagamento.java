@@ -4,6 +4,7 @@ import com.jefiro.app247.domain.model.dto.OrderResponse;
 import com.jefiro.app247.domain.model.enum_type.PagamentoSource;
 import com.jefiro.app247.domain.model.enum_type.PagamentoStatus;
 import com.jefiro.app247.domain.model.enum_type.PagamentoTipo;
+import com.jefiro.app247.domain.model.enum_type.PaymentMethodId;
 import com.mercadopago.resources.payment.Payment;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -28,10 +29,8 @@ public class Pagamento {
     @ManyToOne
     @JoinColumn(name = "empresa_id")
     private Empresa empresa;
-    @OneToOne
-    @JoinColumn(name = "id_order")
+    @OneToOne(mappedBy = "pagamento")
     private Order order;
-
     private BigDecimal valor;
 
     @Enumerated(EnumType.STRING)
@@ -58,7 +57,8 @@ public class Pagamento {
 
     private LocalDateTime updatedAt;
 
-    private String paymentMethodId;
+    @Enumerated(EnumType.STRING)
+    private PaymentMethodId paymentMethodId;
 
     private String statusDetail;
 
@@ -78,7 +78,7 @@ public class Pagamento {
         this.transactionId = payment.getId().toString();
     }
 
-     public Pagamento(Order order, OrderResponse response) {
+    public Pagamento(Order order, OrderResponse response) {
         this.sourcePaiment = PagamentoSource.TERMINAL;
         this.empresa = order.getEmpresa();
         this.order = order;
@@ -86,6 +86,19 @@ public class Pagamento {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
         this.status = PagamentoStatus.PENDING;
-        this.transactionId = response.transactions().payments().get(0).id();
+        if (response.transactions() != null
+                && response.transactions().payments() != null
+                && !response.transactions().payments().isEmpty()) {
+            this.transactionId = response.transactions().payments().get(0).id();
+        }
+    }
+    public Pagamento(Order order) {
+        this.sourcePaiment = PagamentoSource.TERMINAL;
+        this.empresa = order.getEmpresa();
+        this.order = order;
+        this.valor = order.getTotal();
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+        this.status = PagamentoStatus.PENDING;
     }
 }

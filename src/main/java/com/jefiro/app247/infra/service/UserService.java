@@ -1,6 +1,7 @@
 package com.jefiro.app247.infra.service;
 
 import com.jefiro.app247.domain.model.Condominio;
+import com.jefiro.app247.domain.model.Empresa;
 import com.jefiro.app247.domain.model.auth.RoleUser;
 import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.dto.*;
@@ -33,12 +34,14 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Random;
+import java.security.SecureRandom;
+import java.io.IOException;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Service
 public class UserService {
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     @Autowired
     RedisTemplate<String, Object> redisTemplate;
     @Autowired
@@ -55,6 +58,8 @@ public class UserService {
     FileStorageService fileStorageService;
     @Autowired
     CondominioRepository condominioRepository;
+    @Autowired
+    EmpresaService empresaService;
 
     public User getUser(String user) {
         return repository.findById(user).orElseThrow(UserNotFoundException::new);
@@ -121,10 +126,8 @@ public class UserService {
     }
 
     public void recoveryPassword(String cpf) {
-        try {
-            User user = repository.getByCpf(cpf).orElseThrow(() -> new UserNotFoundException("Usuário não existe"));
-
-            String code = String.valueOf(100000 + new Random().nextInt(900000));
+        repository.getByCpf(cpf).ifPresent(user -> {
+            String code = String.valueOf(100000 + SECURE_RANDOM.nextInt(900000));
 
             ValidateCodeRequest passwordRecovery = new ValidateCodeRequest(code, user.getCpf(), user.getEmail(), user.getNome());
 
@@ -138,72 +141,46 @@ public class UserService {
                     passwordRecovery,
                     Duration.ofMinutes(15)
             );
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
 
     }
 
     public String verificarCode(ValidateCodeRequest passwordRecovery) {
-        try {
-            ValidateCodeRequest recovery = (ValidateCodeRequest) redisTemplate
-                    .opsForValue()
-                    .get("recovery:" + passwordRecovery.cpf());
+        ValidateCodeRequest recovery = (ValidateCodeRequest) redisTemplate
+                .opsForValue()
+                .get("recovery:" + passwordRecovery.cpf());
 
-            if (recovery == null) {
-                throw new ExpiredCodeException("Código expirado");
-            }
-
-            if (!recovery.code().equals(passwordRecovery.code())) {
-                throw new InvalidCodeException("Código inválido");
-            }
-
-            redisTemplate.delete(
-                    "recovery:" + passwordRecovery.cpf()
-            );
-
-
-            String resetToken = UUID.randomUUID().toString();
-
-            redisTemplate.opsForValue().set(
-                    "reset:" + passwordRecovery.cpf(),
-                    resetToken,
-                    15,
-                    TimeUnit.MINUTES
-            );
-
-            return resetToken;
-
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        if (recovery == null) {
+            throw new ExpiredCodeException("Código expirado");
         }
+        if (!recovery.code().equals(passwordRecovery.code())) {
+            throw new InvalidCodeException("Código inválido");
+        }
+        redisTemplate.delete("recovery:" + passwordRecovery.cpf());
+
+        String resetToken = UUID.randomUUID().toString();
+        redisTemplate.opsForValue().set(
+                "reset:" + passwordRecovery.cpf(), resetToken, 15, TimeUnit.MINUTES);
+
+        return resetToken;
     }
 
     public boolean novaSenha(ResetPasswordRequest request) {
-        try {
-            String token = (String) redisTemplate.opsForValue()
-                    .get("reset:" + request.cpf());
+        String token = (String) redisTemplate.opsForValue()
+                .get("reset:" + request.cpf());
 
-
-            if (token == null) {
-                throw new ExpiredTokenException();
-            }
-
-            if (!token.equals(request.token())) {
-                throw new InvalidTokenException();
-            }
-
-            User user = findByCpf(request.cpf());
-
-            user.setSenha(passwordEncoder.encode(request.novaSenha()));
-
-            repository.save(user);
-
-            redisTemplate.delete("reset:" + request.cpf());
-            return true;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        if (token == null) {
+            throw new ExpiredTokenException();
         }
+        if (!token.equals(request.token())) {
+            throw new InvalidTokenException();
+        }
+
+        User user = findByCpf(request.cpf());
+        user.setSenha(passwordEncoder.encode(request.novaSenha()));
+        repository.save(user);
+        redisTemplate.delete("reset:" + request.cpf());
+        return true;
     }
 
 
@@ -212,80 +189,51 @@ public class UserService {
     }
 
     public void cadastrar(@Valid UserRequestDTO requestDTO) {
-        try {
-            if (repository.existsByCpf(requestDTO.cpf())) {
-                throw new DuplicateCpfException();
-            }
-            User user = new User(requestDTO);
-
-            user.setSenha(
-                    passwordEncoder.encode(requestDTO.senha())
-            );
-            user = repository.save(user);
-
-
-            publisher.publishEvent(
-                    new UserCreatedEvent(user)
-            );
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        Empresa empresa = empresaService.getEmpresa(EmpresaContext.require());
+        User user = new User(requestDTO);
+        user.setEmpresa(empresa);
+        salvarNovoUsuario(user, RoleUser.USER);
     }
 
-    public User cadastrar(@Valid User requestDTO, RoleUser roleUser) {
-        try {
-            if (repository.existsByCpf(requestDTO.getCpf())) {
-                throw new DuplicateCpfException();
-            }
+    public User cadastrarGestor(@Valid UserRequestDTO requestDTO, Empresa empresa) {
+        User gestor = new User(requestDTO);
+        gestor.setEmpresa(empresa);
+        return salvarNovoUsuario(gestor, RoleUser.ADMIN);
+    }
 
-            User user = requestDTO;
-
-            user.setRole(roleUser);
-
-            user.setSenha(
-                    passwordEncoder.encode(requestDTO.getSenha())
-            );
-            user = repository.save(user);
-
-            publisher.publishEvent(
-                    new UserCreatedEvent(user)
-            );
-            return user;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+    private User salvarNovoUsuario(User user, RoleUser roleUser) {
+        if (repository.existsByCpf(user.getCpf())) {
+            throw new DuplicateCpfException();
         }
+        user.setRole(roleUser);
+        user.setSenha(passwordEncoder.encode(user.getSenha()));
+        User salvo = repository.save(user);
+        publisher.publishEvent(new UserCreatedEvent(salvo));
+        return salvo;
     }
 
     @Transactional
     public boolean salvarFoto(MultipartFile file, String id) {
+        User user = getUser(id);
         try {
-            User user = getUser(id);
-
             user.setFotoPerfil(fileStorageService.salvarArquivo(file));
-
-            repository.save(user);
-
-            return true;
-
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new FileStorageException("Falha ao armazenar foto do usuário", e);
         }
+        repository.save(user);
+
+        return true;
     }
 
     public void alterarSenha(ChangePasswordRequest request) {
-        try {
-            User user = getUser(request.userId());
+        User user = getUser(request.userId());
 
-            if (!passwordEncoder.matches(request.oldPassword(), user.getSenha())) {
-                throw new InvalidPasswordException("Senha atual incorreta");
-            }
-
-            user.setSenha(passwordEncoder.encode(request.newPassword()));
-
-            repository.save(user);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        if (!passwordEncoder.matches(request.oldPassword(), user.getSenha())) {
+            throw new InvalidPasswordException("Senha atual incorreta");
         }
+        user.setSenha(passwordEncoder.encode(request.newPassword()));
+
+        repository.save(user);
     }
 
     public void atualizarUsuario(String id, UserUpdate request) {
@@ -323,12 +271,13 @@ public class UserService {
         repository.save(user);
     }
 
-    public Condominio findById(Long id) {
-        return condominioRepository.findById(id).orElseThrow(() -> new NoSuchElementException("Condominio não encontrado"));
+    public Condominio findById(String id) {
+        return condominioRepository.findByIdCondominioAndEmpresaId(id, EmpresaContext.require())
+                .orElseThrow(() -> new NoSuchElementException("Condominio não encontrado"));
     }
 
     public void sendCode(ValidateEmailRequest email) {
-        String code = String.valueOf(100000 + new Random().nextInt(900000));
+        String code = String.valueOf(100000 + SECURE_RANDOM.nextInt(900000));
 
         email.setCode(code);
 
@@ -337,24 +286,22 @@ public class UserService {
         redisTemplate.opsForValue().set("email_validation_queue:" + email.getEmail(), code, Duration.ofMinutes(15));
     }
 
+    @Transactional
     public void verificarCode(ValidateEmailRequest emailValidate) {
-        try {
-            String recovery = (String) redisTemplate.opsForValue().get("email_validation_queue:" + emailValidate.getEmail());
+        String recovery = (String) redisTemplate.opsForValue().get("email_validation_queue:" + emailValidate.getEmail());
 
-            if (recovery == null) {
-                throw new ExpiredCodeException("Código expirado");
-            }
-
-            if (!recovery.equals(emailValidate.getCode())) {
-                throw new InvalidCodeException("Código inválido");
-            }
-
-            redisTemplate.delete(
-                    "email_validation_queue:" + emailValidate.getEmail()
-            );
-
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        if (recovery == null) {
+            throw new ExpiredCodeException("Código expirado");
         }
+        if (!recovery.equals(emailValidate.getCode())) {
+            throw new InvalidCodeException("Código inválido");
+        }
+        redisTemplate.delete("email_validation_queue:" + emailValidate.getEmail());
+        repository.findByEmail(emailValidate.getEmail()).ifPresent(user -> {
+            user.setEmailVerificado(true);
+            user.setUpdatedAt(LocalDateTime.now());
+            repository.save(user);
+        });
+
     }
 }

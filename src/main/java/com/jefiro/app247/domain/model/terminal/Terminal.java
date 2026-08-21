@@ -1,8 +1,6 @@
 package com.jefiro.app247.domain.model.terminal;
 
 import com.jefiro.app247.domain.model.Condominio;
-import com.jefiro.app247.domain.model.Empresa;
-import com.jefiro.app247.domain.model.auth.Endereco;
 import com.jefiro.app247.domain.model.dto.TerminalRequest;
 import com.jefiro.app247.domain.model.enum_type.TerminalStatus;
 import jakarta.persistence.*;
@@ -11,7 +9,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @AllArgsConstructor
 @NoArgsConstructor
@@ -24,6 +21,7 @@ public class Terminal {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(length = 36)
     private String idTerminal;
     private String nome;
     private String codigo;
@@ -31,8 +29,8 @@ public class Terminal {
     @Enumerated(value = EnumType.STRING)
     private TerminalStatus status;
     private LocalDateTime lastPing;
-    @ManyToOne
-    @JoinColumn(name = "id_condominio", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "condominio_id", nullable = false)
     private Condominio condominio;
 
     private String versaoSoftware;
@@ -40,12 +38,11 @@ public class Terminal {
     private String macAddress;
     private String ipAddress;
 
+    @Column(name = "mercado_pago_terminal_id", unique = true)
+    private String mercadoPagoTerminalId;
+
     private LocalDateTime create_at;
     private LocalDateTime update_at;
-    @ManyToOne
-    @JoinColumn(name = "empresa_id")
-    private Empresa empresa;
-
     public Terminal(TerminalRequest request) {
         this.nome = request.nome();
         this.codigo = request.serialNumber();

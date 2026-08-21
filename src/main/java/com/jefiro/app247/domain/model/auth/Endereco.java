@@ -33,7 +33,7 @@ public class Endereco {
 
     public Endereco(EnderecoDTO enderecoDTO) {
         this.rua = enderecoDTO.rua();
-        this.numero = enderecoDTO.rua();
+        this.numero = enderecoDTO.numero();
         this.complemento = enderecoDTO.complemento();
         this.bairro = enderecoDTO.bairro();
         this.cidade = enderecoDTO.cidade();

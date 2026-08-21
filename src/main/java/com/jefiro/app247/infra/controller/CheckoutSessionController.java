@@ -29,7 +29,6 @@ public class CheckoutSessionController {
 
     @GetMapping(value = "/session")
     public ResponseEntity<?> getCarrinho(@RequestParam String idSession) {
-        System.out.println(idSession);
         return ResponseEntity.ok(service.getCarrinho(idSession));
     }
 

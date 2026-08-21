@@ -19,7 +19,7 @@ public class FileController {
 
         String nomeArquivo = service.salvarArquivo(file);
 
-        String url = "http://localhost:8080/files/" + nomeArquivo;
+        String url = "/files/" + nomeArquivo;
 
         return ResponseEntity.ok(url);
     }

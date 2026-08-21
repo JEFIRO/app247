@@ -1,21 +1,29 @@
 package com.jefiro.app247.infra.controller;
 
-import com.jefiro.app247.domain.model.Empresa;
+import com.jefiro.app247.domain.model.dto.EmpresaRequest;
+import com.jefiro.app247.domain.model.dto.EmpresaResponse;
 import com.jefiro.app247.infra.service.EmpresaService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping
+@RequestMapping("/empresas")
 public class EmpresaController {
+    private final EmpresaService service;
 
-    @Autowired
-    EmpresaService empresaService;
+    public EmpresaController(EmpresaService service) {
+        this.service = service;
+    }
 
-    @PostMapping
-    public Empresa newEmpresa(Empresa empresa) {
-        return empresaService.newEmpresa(empresa);
+    @GetMapping("/{empresaId}")
+    public ResponseEntity<EmpresaResponse> buscar(@PathVariable String empresaId) {
+        return ResponseEntity.ok(service.getEmpresaDoContexto(empresaId));
+    }
+
+    @PutMapping("/{empresaId}")
+    public ResponseEntity<EmpresaResponse> atualizar(@PathVariable String empresaId,
+                                                      @RequestBody @Valid EmpresaRequest request) {
+        return ResponseEntity.ok(service.atualizar(empresaId, request));
     }
 }

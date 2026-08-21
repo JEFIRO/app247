@@ -1,6 +1,7 @@
 package com.jefiro.app247.infra.repository;
 
 import com.jefiro.app247.domain.model.auth.User;
+import com.jefiro.app247.domain.model.Empresa;
 import com.jefiro.app247.infra.service.UserService;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
@@ -11,6 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -46,6 +48,16 @@ class UserRepositoryTest {
     }
 
     private User createUser() {
+        Empresa empresa = Empresa.builder()
+                .razaoSocial("Empresa Teste")
+                .nomeFantasia("Empresa Teste")
+                .cnpj("12345678000199")
+                .email("empresa@email.com")
+                .tenantId("tenant-teste")
+                .ativo(true)
+                .dataCadastro(LocalDateTime.now())
+                .build();
+        entityManager.persist(empresa);
         User user = User.builder()
                 .nome("Teste")
                 .sobrenome("User")
@@ -54,6 +66,7 @@ class UserRepositoryTest {
                 .cpf("12345678901")
                 .telefone("71999999999")
                 .dataNascimento(LocalDate.of(2000, 1, 1))
+                .empresa(empresa)
                 .build();
 
         entityManager.persist(user);

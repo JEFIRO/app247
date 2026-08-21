@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import java.util.NoSuchElementException;
 
 @ControllerAdvice
 public class RestExceptionHandler extends ResponseEntityExceptionHandler {
@@ -21,7 +22,8 @@ public class RestExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<RestErrorMessage> noAtoties(ResponseStatusException exception) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new RestErrorMessage(HttpStatus.UNAUTHORIZED, exception.getMessage()));
+        HttpStatus status = HttpStatus.valueOf(exception.getStatusCode().value());
+        return ResponseEntity.status(status).body(new RestErrorMessage(status, exception.getReason()));
     }
 
     @ExceptionHandler(ExpiredCodeException.class)
@@ -51,6 +53,37 @@ public class RestExceptionHandler extends ResponseEntityExceptionHandler {
     }
     @ExceptionHandler(TerminalNotFoundException.class)
     public ResponseEntity<RestErrorMessage> TerminalNotFound(TerminalNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(new RestErrorMessage(HttpStatus.CONFLICT, ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new RestErrorMessage(HttpStatus.NOT_FOUND, ex.getMessage()));
+    }
+
+    @ExceptionHandler(ExternalServiceException.class)
+    public ResponseEntity<RestErrorMessage> externalService(ExternalServiceException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new RestErrorMessage(
+                HttpStatus.BAD_GATEWAY,
+                "Falha temporária na integração com " + ex.getService()
+        ));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<RestErrorMessage> invalidArgument(IllegalArgumentException ex) {
+        return ResponseEntity.badRequest().body(new RestErrorMessage(HttpStatus.BAD_REQUEST, ex.getMessage()));
+    }
+
+    @ExceptionHandler(FileStorageException.class)
+    public ResponseEntity<RestErrorMessage> fileStorage(FileStorageException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new RestErrorMessage(
+                HttpStatus.INTERNAL_SERVER_ERROR, "Não foi possível armazenar o arquivo"));
+    }
+
+    @ExceptionHandler(NoSuchElementException.class)
+    public ResponseEntity<RestErrorMessage> notFound(NoSuchElementException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new RestErrorMessage(HttpStatus.NOT_FOUND, ex.getMessage()));
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<RestErrorMessage> conflict(IllegalStateException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new RestErrorMessage(HttpStatus.CONFLICT, ex.getMessage()));
     }
 }

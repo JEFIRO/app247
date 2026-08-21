@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonValue;
 
 public enum StatusDetail {
 
-    CREATED("created"),                                   // A order foi criada. Detalhe espelha o status "created" (sem motivo específico).
+    CREATED("created"), // A order foi criada. Detalhe espelha o status "created" (sem motivo específico).
     AT_TERMINAL("at_terminal"),                           // A order está no terminal. Detalhe espelha o status "at_terminal".
     ACCREDITED("accredited"),                             // O pagamento foi acreditado com sucesso. Único valor permitido para o status "processed".
     CANCELED("canceled"),                                 // A order foi cancelada. Detalhe espelha o status "canceled".
@@ -20,7 +20,9 @@ public enum StatusDetail {
     INVALID_INSTALLMENTS("invalid_installments"),         // O número de parcelas é inválido. Disponível apenas para o status "failed".
     MAX_ATTEMPTS_EXCEEDED("max_attempts_exceeded"),       // O número máximo de tentativas foi excedido. Disponível apenas para o status "failed".
     REJECTED_OTHER_REASON("rejected_other_reason"),       // O pagamento foi rejeitado por outro motivo. Disponível apenas para o status "failed".
-    PROCESSING_ERROR("processing_error");                 // Ocorreu um erro ao processar o pagamento. Disponível apenas para o status "failed".
+    PROCESSING_ERROR("processing_error"),               // Ocorreu um erro ao processar o pagamento. Disponível apenas para o status "failed".
+    FAILED("failed"),
+    CHECK_ON_TERMINAL("check_on_terminal");
 
     private final String value;
 
@@ -41,5 +43,17 @@ public enum StatusDetail {
             }
         }
         throw new IllegalArgumentException("Valor de status_detail desconhecido: " + value);
+    }
+
+    public static StatusDetail findByValue(String value) {
+        if (value == null) {
+            return null;
+        }
+        for (StatusDetail detail : values()) {
+            if (detail.value.equalsIgnoreCase(value)) {
+                return detail;
+            }
+        }
+        return null;
     }
 }

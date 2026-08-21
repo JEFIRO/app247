@@ -35,5 +35,31 @@ public enum OrderStatus {
         }
         throw new IllegalArgumentException("Valor de status desconhecido: " + value);
     }
-}
 
+    public static OrderStatus findByValue(String value) {
+        if (value == null) {
+            return null;
+        }
+        for (OrderStatus status : values()) {
+            if (status.value.equalsIgnoreCase(value)) {
+                return status;
+            }
+        }
+        return null;
+    }
+
+    public boolean canTransitionTo(OrderStatus next) {
+        if (next == null || this == next) {
+            return false;
+        }
+        return switch (this) {
+            case PENDING -> true;
+            case CREATED -> next != PENDING;
+            case AT_TERMINAL -> next != PENDING && next != CREATED;
+            case ACTION_REQUIRED -> next == PROCESSED || next == FAILED
+                    || next == CANCELED || next == EXPIRED;
+            case PROCESSED -> next == REFUNDED;
+            case CANCELED, EXPIRED, FAILED, REFUNDED -> false;
+        };
+    }
+}

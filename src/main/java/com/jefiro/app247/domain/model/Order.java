@@ -5,10 +5,7 @@ import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
 import com.jefiro.app247.domain.model.enum_type.OriginRequest;
 import com.jefiro.app247.domain.model.enum_type.order.StatusDetail;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -19,6 +16,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @Entity
 @Table(name = "orders")
+@ToString
 public class Order {
 
     @Id
@@ -35,6 +33,7 @@ public class Order {
     @JoinColumn(name = "id_user")
     private User user;
 
+    @Column(length = 36)
     private String idTerminal;
 
     private BigDecimal subtotal;
@@ -56,7 +55,8 @@ public class Order {
 
     private LocalDateTime paidAt;
 
-    @OneToOne(mappedBy = "order", cascade = CascadeType.ALL)
+    @OneToOne(cascade = CascadeType.ALL)
+    @JoinColumn(name = "id_pagamento")
     private Pagamento pagamento;
 
     @Column(name = "mp_order_id")
@@ -79,11 +79,16 @@ public class Order {
     @Column(name = "mp_terminal_id")
     private String mpTerminalId;
 
+    @Column(name = "mp_event_version")
+    private Integer mpEventVersion;
+
+    @Column(name = "mp_event_date")
+    private LocalDateTime mpEventDate;
+
 
     @PrePersist
     public void prePersist() {
         createdAt = LocalDateTime.now();
-
         if (status == null) {
             status = OrderStatus.PENDING;
         }

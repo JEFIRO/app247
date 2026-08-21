@@ -26,10 +26,7 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
                 objectMapper.readValue(
                         message.getPayload(),
                         TerminalStatusDTO.class
-                );
-        service.updateStatus(dto);
-        System.out.println(
-
         );
+        service.updateStatus(dto);
     }
 }

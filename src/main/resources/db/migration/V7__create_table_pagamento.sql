@@ -1,33 +1,33 @@
-create table pagamento
+CREATE TABLE pagamento
 (
-    id_pagamento       varchar(36) primary key,
+    id_pagamento       VARCHAR(36) PRIMARY KEY,
 
-    id_order           varchar(36)    not null unique,
+    valor              DECIMAL(10, 2) NOT NULL,
 
-    valor              decimal(10, 2) not null,
+    tipo               VARCHAR(16),
 
-    tipo               varchar(30)    not null,
+    status             VARCHAR(30) DEFAULT 'PENDING',
 
-    status             varchar(30) default 'PENDING',
+    id_transaction     VARCHAR(255),
 
-    id_transaction     varchar(255),
+    nsu                VARCHAR(255),
 
-    nsu                varchar(255),
+    authorization_code VARCHAR(255),
 
-    authorization_code varchar(255),
+    created_at         TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
 
-    created_at         timestamp   default current_timestamp,
+    paid_at            TIMESTAMP,
 
-    paid_at            timestamp,
-    updated_at         timestamp,
-    payment_method_id  varchar(100),
-    status_detail      varchar(100),
+    updated_at         TIMESTAMP,
 
-    empresa_id         varchar(36)    NOT NULL,
+    payment_method_id  VARCHAR(100),
+
+    status_detail      VARCHAR(100),
+
+    empresa_id         VARCHAR(36)    NOT NULL,
+
+    source_paiment     varchar(16)    not null,
     CONSTRAINT fk_pagamento_empresa
         FOREIGN KEY (empresa_id)
-            REFERENCES empresa (id),
-    constraint fk_pagamento_order
-        foreign key (id_order)
-            references orders (id_order)
+            REFERENCES empresa (id)
 );

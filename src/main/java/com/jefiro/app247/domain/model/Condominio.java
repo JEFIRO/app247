@@ -1,18 +1,13 @@
 package com.jefiro.app247.domain.model;
 
 import com.jefiro.app247.domain.model.auth.Endereco;
-import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.dto.CondominioRequest;
-import com.jefiro.app247.domain.model.terminal.Terminal;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
 
 @Data
 @AllArgsConstructor
@@ -29,8 +24,8 @@ public class Condominio {
 
     private String nome;
     private String cnpj;
-    @ManyToOne
-    @JoinColumn(name = "empresa_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "empresa_id", nullable = false)
     private Empresa empresa;
 
     @OneToOne(cascade = CascadeType.ALL)
@@ -42,16 +37,6 @@ public class Condominio {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    @OneToMany(mappedBy = "condominio")
-    private List<User> users = new ArrayList<>();
-
-
-    @OneToMany(
-            mappedBy = "condominio",
-            cascade = CascadeType.ALL
-    )
-    private List<Terminal> terminais = new ArrayList<>();
-
     public Condominio(CondominioRequest request, Endereco endereco) {
         this.nome = request.nome();
         this.cnpj = request.cnpj();
@@ -61,14 +46,4 @@ public class Condominio {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public void addUser(User user) {
-        user.setCondominio(this);
-        this.users.add(user);
-    }
-
-    public void addTerminal(Terminal terminal) {
-        terminal.setCondominio(this);
-        this.terminais.add(terminal);
-
-    }
 }

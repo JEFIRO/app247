@@ -2,9 +2,6 @@ package com.jefiro.app247.domain.model.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
-import com.jefiro.app247.domain.model.enum_type.order.StatusDetail;
-
 import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -33,16 +30,18 @@ public record OrderResponse(
         @JsonProperty("integration_data")
         IntegrationData integrationData,
 
-        OrderStatus status,
+        String status,
 
         @JsonProperty("status_detail")
-        StatusDetail statusDetail,
+        String statusDetail,
 
         @JsonProperty("created_date")
         String createdDate,
 
         @JsonProperty("last_updated_date")
         String lastUpdatedDate,
+
+        Integer version,
 
         Config config,
 
@@ -114,7 +113,21 @@ public record OrderResponse(
 
             String amount,
 
-            String status
+            String status,
+
+            @JsonProperty("status_detail")
+            String statusDetail,
+
+            @JsonProperty("payment_method")
+            PaymentTransactionMethod paymentMethod
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record PaymentTransactionMethod(
+            String id,
+            Integer installments,
+            String type
     ) {
     }
 }

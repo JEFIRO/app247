@@ -33,8 +33,8 @@ public class User implements UserDetails {
     @Column(length = 36)
     private String idUser;
 
-    @ManyToOne
-    @JoinColumn(name = "empresa_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "empresa_id", nullable = false)
     private Empresa empresa;
 
     private String nome;
@@ -147,6 +147,6 @@ public class User implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return UserDetails.super.isEnabled();
+        return Boolean.TRUE.equals(ativo);
     }
 }

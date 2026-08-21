@@ -58,7 +58,7 @@ public class UserController {
 
     @GetMapping("/{userId}")
     public ResponseEntity<?> getUser(@PathVariable String userId) {
-        return ResponseEntity.ok(service.getUser(userId));
+        return ResponseEntity.ok(new UserResponseDTO(service.getUser(userId)));
     }
 
     @PostMapping(value = "foto", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

@@ -14,6 +14,12 @@ public class PagamentoController {
 
     @GetMapping("/terminal/{carrinho_id}")
     public ResponseEntity<?> getPagamento(@PathVariable String carrinho_id) {
+        service.gerarCobranca(carrinho_id);
+        return ResponseEntity.ok(true);
+    }
+
+    @PostMapping("/terminal/{carrinho_id}")
+    public ResponseEntity<?> iniciarPagamentoPoint(@PathVariable String carrinho_id) {
         return ResponseEntity.ok(service.gerarCobranca(carrinho_id));
     }
 }

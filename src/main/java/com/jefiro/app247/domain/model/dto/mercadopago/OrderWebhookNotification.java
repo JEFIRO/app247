@@ -3,15 +3,11 @@ package com.jefiro.app247.domain.model.dto.mercadopago;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
-import com.jefiro.app247.domain.model.enum_type.order.StatusDetail;
-import com.jefiro.app247.domain.model.enum_type.order.WebhookAction;
-
 import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record OrderWebhookNotification(
-        WebhookAction action,
+        String action,
 
         @JsonProperty("api_version")
         String apiVersion,
@@ -40,10 +36,10 @@ public record OrderWebhookNotification(
 
             String id,
 
-            OrderStatus status,
+            String status,
 
             @JsonProperty("status_detail")
-            StatusDetail statusDetail,
+            String statusDetail,
 
             @JsonProperty("total_paid_amount")
             String totalPaidAmount,
@@ -52,7 +48,7 @@ public record OrderWebhookNotification(
 
             String type,
 
-            int version
+            Integer version
     ) {
     }
 
@@ -87,7 +83,7 @@ public record OrderWebhookNotification(
     public record PaymentMethod(
             String id,
 
-            int installments,
+            Integer installments,
 
             String type
     ) {

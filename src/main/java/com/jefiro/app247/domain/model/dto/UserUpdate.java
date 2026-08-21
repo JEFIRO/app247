@@ -6,6 +6,6 @@ public record UserUpdate(
         String email,
         String telefone,
         Boolean ativo,
-        Long condominioId
+        String condominioId
 ) {
 }

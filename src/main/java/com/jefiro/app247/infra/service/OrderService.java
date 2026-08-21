@@ -2,11 +2,13 @@ package com.jefiro.app247.infra.service;
 
 import com.jefiro.app247.domain.model.Carrinho;
 import com.jefiro.app247.domain.model.Order;
+import com.jefiro.app247.domain.model.Pagamento;
 import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.dto.OrderDTO;
 import com.jefiro.app247.domain.model.enum_type.CarrinhoStatus;
 import com.jefiro.app247.domain.model.enum_type.OriginRequest;
 import com.jefiro.app247.infra.event.MercadoPagoCobrancaEvent;
+import com.jefiro.app247.infra.event.OrderReservadaEvent;
 import com.jefiro.app247.infra.repository.OrderRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +37,10 @@ public class OrderService {
         Carrinho carrinho = carrinhoService.getById(carrinhoId);
 
         if (carrinho.getStatus() != CarrinhoStatus.OPEN) {
-            throw new RuntimeException("Carrinho já finalizado");
+            throw new IllegalStateException("Carrinho já finalizado");
+        }
+        if (repository.findByCarrinhoIdCarrinho(carrinhoId).isPresent()) {
+            throw new IllegalStateException("Carrinho já possui Order");
         }
 
         carrinho.setStatus(CarrinhoStatus.READY_FOR_PAYMENT);
@@ -46,28 +51,55 @@ public class OrderService {
 
         if (id_user != null) {
             User user = userService.getUser(id_user);
-
-            System.out.println("ID: " + user.getIdUser());
+            if (user.getEmpresa() == null || carrinho.getEmpresa() == null
+                    || !user.getEmpresa().getId().equals(carrinho.getEmpresa().getId())) {
+                throw new IllegalArgumentException("Usuário e carrinho pertencem a empresas diferentes");
+            }
 
             order.setUser(user);
         }
 
-        return repository.save(order);
+        order = repository.saveAndFlush(order);
+        eventPublisher.publishEvent(new OrderReservadaEvent(order));
+        return order;
     }
 
     @Transactional
-    public void criarCobranca(Carrinho carrinho) {
-        try {
-            Order order = new Order(carrinho);
-            order.setOriginRequest(OriginRequest.TERMINAL);
+    public Order createOrderTest(String carrinhoId, String id_user) {
 
-            order = repository.save(order);
+        Carrinho carrinho = carrinhoService.getById(carrinhoId);
+        Order order = new Order(carrinho);
 
-            eventPublisher.publishEvent(new MercadoPagoCobrancaEvent(order));
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        if (id_user != null) {
+            User user = userService.getUser(id_user);
+            if (user.getEmpresa() == null || carrinho.getEmpresa() == null
+                    || !user.getEmpresa().getId().equals(carrinho.getEmpresa().getId())) {
+                throw new IllegalArgumentException("Usuário e carrinho pertencem a empresas diferentes");
+            }
+
+            order.setUser(user);
         }
 
+        Pagamento pagamento = new Pagamento(order);
+        order.setPagamento(pagamento);
+
+        return repository.save(order);
+    }
+
+
+    @Transactional
+    public Order criarCobranca(Carrinho carrinho) {
+        carrinhoService.validarParaPagamento(carrinho);
+        Order order = repository.findByCarrinhoIdCarrinho(carrinho.getIdCarrinho())
+                .orElseGet(() -> createOrder(carrinho.getIdCarrinho(), null));
+        if (order.getMpOrderId() != null) {
+            return order;
+        }
+        carrinho.setStatus(CarrinhoStatus.PAYMENT_PENDING);
+        carrinhoService.save(carrinho);
+
+        eventPublisher.publishEvent(new MercadoPagoCobrancaEvent(order));
+        return order;
     }
 
 
@@ -75,7 +107,22 @@ public class OrderService {
         return repository.findById(id_order).orElseThrow(() -> new NoSuchElementException("Order não existe"));
     }
 
-    public Page<OrderDTO> getOrderByUser(Long user_id, Pageable pageable) {
+    public Order getOrderForUpdate(String idOrder) {
+        return repository.findByIdForUpdate(idOrder)
+                .orElseThrow(() -> new NoSuchElementException("Order não existe"));
+    }
+
+    public Order getOrderForTerminal(String idOrder, String terminalId) {
+        Order order = getOrder(idOrder);
+        String orderTerminalId = order.getCarrinho() != null
+                ? order.getCarrinho().getIdTerminal() : order.getIdTerminal();
+        if (terminalId == null || !terminalId.equals(orderTerminalId)) {
+            throw new NoSuchElementException("Order não existe para o terminal informado");
+        }
+        return order;
+    }
+
+    public Page<OrderDTO> getOrderByUser(String user_id, Pageable pageable) {
         return repository.findOrdersByUserId(user_id, pageable);
     }
 

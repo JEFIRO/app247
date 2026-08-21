@@ -12,6 +12,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -33,6 +35,11 @@ public class ProdutoService {
         if (produtoDTO == null) {
             return null;
         }
+        String empresaId = EmpresaContext.require();
+        String codigo = produtoDTO.codigo().trim();
+        if (produtoRepository.existsByCodigoAndEmpresaId(codigo, empresaId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Este código de produto já está em uso.");
+        }
         String urlImagem = null;
 
         if (file != null && !file.isEmpty()) {
@@ -40,6 +47,8 @@ public class ProdutoService {
         }
 
         Produto produto = new Produto(produtoDTO);
+        produto.setCodigo(codigo);
+        produto.setEmpresa(empresaService.getEmpresa(empresaId));
         produto.setFoto(urlImagem);
         return produtoRepository.save(produto);
     }
@@ -48,7 +57,7 @@ public class ProdutoService {
         if (produtoList.isEmpty()) {
             throw new RuntimeException("a lista não pode esta vazia");
         }
-        Empresa empresa = empresaService.getEmpresa(EmpresaContext.get());
+        Empresa empresa = empresaService.getEmpresa(EmpresaContext.require());
         List<Produto> produto = produtoList.stream().map(Produto::new).toList();
         produto.forEach(p ->
                 p.setEmpresa(empresa)
@@ -57,8 +66,8 @@ public class ProdutoService {
     }
 
     public Produto atualizar(String id, CreateProductDTO dto, MultipartFile file) throws IOException {
-
-        Produto produto = produtoRepository.findById(id)
+        String empresaId = EmpresaContext.require();
+        Produto produto = produtoRepository.findByIdProdutoAndEmpresaId(id, empresaId)
                 .orElseThrow(() -> new RuntimeException("Produto não encontrado"));
 
         if (dto == null) {
@@ -67,7 +76,11 @@ public class ProdutoService {
 
 
         if (dto.codigo() != null && !dto.codigo().trim().isEmpty()) {
-            produto.setCodigo(dto.codigo().trim());
+            String codigo = dto.codigo().trim();
+            if (produtoRepository.existsByCodigoAndEmpresaIdAndIdProdutoNot(codigo, empresaId, id)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Este código de produto já está em uso.");
+            }
+            produto.setCodigo(codigo);
         }
 
         if (dto.nome() != null && !dto.nome().trim().isEmpty()) {
@@ -80,10 +93,6 @@ public class ProdutoService {
 
         if (dto.preco() != null && dto.preco().compareTo(BigDecimal.ZERO) > 0) {
             produto.setPreco(dto.preco());
-        }
-
-        if (dto.quantidade() != null && dto.quantidade() >= 0) {
-            produto.setQuantidade(dto.quantidade());
         }
 
         if (dto.unidadeMedida() != null && !dto.unidadeMedida().trim().isEmpty()) {
@@ -119,28 +128,34 @@ public class ProdutoService {
     }
 
     public Page<Produto> listar(Pageable pageable) {
-        return produtoRepository.findAll(pageable);
+        return produtoRepository.findAllByEmpresaId(EmpresaContext.require(), pageable);
     }
 
     public Produto buscarPorCodigo(String codigo) {
-        return produtoRepository.findByCodigo(codigo).orElseThrow(() -> new RuntimeException("Produto não encontrado"));
+        return produtoRepository.findByCodigoAndEmpresaId(codigo, EmpresaContext.require())
+                .orElseThrow(() -> new RuntimeException("Produto não encontrado"));
     }
 
     public Produto buscarPorId(String id) {
-        return produtoRepository.findById(id).orElseThrow(() -> new RuntimeException("Produto não existe"));
+        return buscarPorIdDoTenant(id, EmpresaContext.require());
+    }
+
+    public Produto buscarPorIdDoTenant(String id, String empresaId) {
+        return produtoRepository.findByIdProdutoAndEmpresaId(id, empresaId)
+                .orElseThrow(() -> new RuntimeException("Produto não existe"));
     }
 
     public List<Produto> sync(String lastSync) {
         try {
             var data = LocalDateTime.parse(lastSync);
-            return produtoRepository.findAllByUpdateAtAfter(data);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+            return produtoRepository.findAllByUpdateAtAfterAndEmpresaId(data, EmpresaContext.require());
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new IllegalArgumentException("lastSync deve estar no formato ISO-8601", e);
         }
     }
 
     public List<Produto> findTop10ByOrderByCreatedAtDesc() {
-        return produtoRepository.findTop10ByOrderByCreateAtDesc();
+        return produtoRepository.findTop10ByEmpresaIdOrderByCreateAtDesc(EmpresaContext.require());
 
     }
 }

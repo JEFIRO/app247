@@ -1,0 +1,209 @@
+{
+  "main": {
+    "id": "c60ccf29467794ad",
+    "type": "split",
+    "children": [
+      {
+        "id": "09a624bafbe18f47",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "a9bd5c6320d173ef",
+            "type": "leaf",
+            "state": {
+              "type": "empty",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "Nova aba"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "7fc0fd1e56d6915c",
+    "type": "split",
+    "children": [
+      {
+        "id": "d3433ec62f35ac4b",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "efb51a4749d056b0",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Explorador de arquivos"
+            }
+          },
+          {
+            "id": "0f15220a2e38e35a",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Procurar"
+            }
+          },
+          {
+            "id": "60a7529558d0a44d",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Marcadores"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "b5f052b35d11ce82",
+    "type": "split",
+    "children": [
+      {
+        "id": "4c02cd711e5de2ee",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "6a2c77e89623ae06",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Links inversos"
+            }
+          },
+          {
+            "id": "5a2c838e1dd04c13",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Links de saída"
+            }
+          },
+          {
+            "id": "9fc3f4a21dede9a7",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etiquetas"
+            }
+          },
+          {
+            "id": "a952c82c212b3a93",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Todas as propriedades"
+            }
+          },
+          {
+            "id": "1f77e4e3806cf883",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Sumário"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Abrir a troca rápida": false,
+      "graph:Abrir visualização em gráfico": false,
+      "canvas:Criar novo canvas": false,
+      "daily-notes:Abrir a nota de hoje": false,
+      "templates:Inserir modelo": false,
+      "command-palette:Abrir paleta de comandos": false,
+      "bases:Criar nova base": false
+    }
+  },
+  "active": "a9bd5c6320d173ef",
+  "lastOpenFiles": [
+    "autenticacao.md",
+    "melhorias.md",
+    "mapa-projeto.md",
+    "estoque.md",
+    "bugs.md",
+    "banco-de-dados.md",
+    "auditoria-bugs.md",
+    "arquitetura-geral.md",
+    "00-index.md",
+    "decisoes/002-credenciais-e-terminais-mercado-pago.md",
+    "decisoes/001-hierarquia-empresa-condominio-terminal.md",
+    "Sem título.base",
+    "Sem título.canvas",
+    "api.md",
+    "contexto.md",
+    "websocket.md",
+    "mercado-pago.md",
+    "auditoria-resumo.md",
+    "arquitetura.md",
+    "00-index.md~",
+    "decisoes",
+    "Bem-vindo.md"
+  ]
+}

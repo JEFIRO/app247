@@ -16,8 +16,7 @@ public record CreateProductDTO(
         @Positive(message = "O preço deve ser maior que zero.")
         BigDecimal preco,
 
-        @NotNull(message = "A quantidade em estoque é obrigatória.")
-        @Min(value = 0, message = "A quantidade não pode ser negativa.")
+        @Deprecated
         Integer quantidade,
 
         @NotBlank(message = "Informe a unidade de medida (ex: kg, g, un).")

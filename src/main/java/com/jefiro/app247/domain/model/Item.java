@@ -1,6 +1,7 @@
 package com.jefiro.app247.domain.model;
 
 import com.jefiro.app247.domain.model.enum_type.ItemStatus;
+import com.jefiro.app247.domain.model.enum_type.UnidadeMedida;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -29,7 +30,9 @@ public class Item {
     @JoinColumn(name = "id_carrinho")
     private Carrinho carrinho;
 
-    private String idProduto;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "id_produto", nullable = false)
+    private Produto produto;
 
     private String barcode;
 
@@ -37,6 +40,9 @@ public class Item {
     private String foto;
 
     private BigDecimal unitPrice;
+
+    @Enumerated(EnumType.STRING)
+    private UnidadeMedida unidadeMedida;
 
     private Integer quantity;
 
@@ -51,10 +57,11 @@ public class Item {
 
     public Item(Produto produto, Integer quantity,
                 BigDecimal receivedWeight) {
-        this.idProduto = produto.getIdProduto();
+        this.produto = produto;
         this.barcode = produto.getCodigo();
         this.name = produto.getNome();
         this.unitPrice = produto.getPreco();
+        this.unidadeMedida = produto.getUnidadeMedida();
         this.expectedWeight = produto.getPeso();
         this.foto = produto.getFoto();
         this.quantity = quantity;
@@ -62,5 +69,9 @@ public class Item {
         this.status = ItemStatus.VALIDATED;
         this.requiresWeight = true;
 
+    }
+
+    public String getIdProduto() {
+        return produto != null ? produto.getIdProduto() : null;
     }
 }

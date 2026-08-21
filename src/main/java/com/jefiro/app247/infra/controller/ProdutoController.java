@@ -2,6 +2,7 @@ package com.jefiro.app247.infra.controller;
 
 import com.jefiro.app247.domain.model.Produto;
 import com.jefiro.app247.domain.model.dto.CreateProductDTO;
+import com.jefiro.app247.domain.model.dto.ProdutoResponse;
 import com.jefiro.app247.domain.model.dto.response.PageResponse;
 import com.jefiro.app247.infra.service.ProdutoService;
 import jakarta.validation.Valid;
@@ -26,19 +27,17 @@ public class ProdutoController {
     private ProdutoService produtoService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<Produto> salvar(
+    public ResponseEntity<ProdutoResponse> salvar(
             @RequestPart("data") @Valid CreateProductDTO productDTO,
             @RequestPart(value = "file", required = false) MultipartFile file
     ) throws IOException {
 
-        System.out.println(productDTO);
-
-        return ResponseEntity.ok(produtoService.salvar(productDTO, file));
+        return ResponseEntity.ok(new ProdutoResponse(produtoService.salvar(productDTO, file)));
     }
 
     @PostMapping("save-list")
-    public ResponseEntity<List<Produto>> saveProdutos(@RequestBody @Valid List<CreateProductDTO> productDTOS) {
-        return ResponseEntity.ok(produtoService.salvarList(productDTOS));
+    public ResponseEntity<List<ProdutoResponse>> saveProdutos(@RequestBody @Valid List<CreateProductDTO> productDTOS) {
+        return ResponseEntity.ok(produtoService.salvarList(productDTOS).stream().map(ProdutoResponse::new).toList());
     }
 
     @GetMapping
@@ -64,17 +63,17 @@ public class ProdutoController {
     }
 
     @GetMapping("/{codigo}")
-    public ResponseEntity<Produto> buscarPorCodigo(@PathVariable String codigo) {
-        return ResponseEntity.ok(produtoService.buscarPorCodigo(codigo));
+    public ResponseEntity<ProdutoResponse> buscarPorCodigo(@PathVariable String codigo) {
+        return ResponseEntity.ok(new ProdutoResponse(produtoService.buscarPorCodigo(codigo)));
     }
 
     @GetMapping("/id")
-    public ResponseEntity<Produto> buscarPorid(@RequestParam String id) {
-        return ResponseEntity.ok(produtoService.buscarPorId(id));
+    public ResponseEntity<ProdutoResponse> buscarPorid(@RequestParam String id) {
+        return ResponseEntity.ok(new ProdutoResponse(produtoService.buscarPorId(id)));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Produto> atualizarProduto(
+    public ResponseEntity<ProdutoResponse> atualizarProduto(
             @PathVariable String id,
             @RequestPart("data") CreateProductDTO dto,
             @RequestPart(value = "file", required = false) MultipartFile file
@@ -82,12 +81,12 @@ public class ProdutoController {
 
         Produto produtoAtualizado = produtoService.atualizar(id, dto, file);
 
-        return ResponseEntity.ok(produtoAtualizado);
+        return ResponseEntity.ok(new ProdutoResponse(produtoAtualizado));
     }
 
     @GetMapping("/sync")
-    public List<Produto> sync(@RequestParam String lastSync) {
-        return produtoService.sync(lastSync);
+    public List<ProdutoResponse> sync(@RequestParam String lastSync) {
+        return produtoService.sync(lastSync).stream().map(ProdutoResponse::new).toList();
     }
 
     @GetMapping("/home")
@@ -96,7 +95,7 @@ public class ProdutoController {
         var destaques = produtoService.findTop10ByOrderByCreatedAtDesc();
 
         return ResponseEntity.ok(Map.of(
-                "destaques", destaques
+                "destaques", destaques.stream().map(ProdutoResponse::new).toList()
         ));
     }
 }

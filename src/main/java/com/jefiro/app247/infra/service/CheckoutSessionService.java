@@ -57,14 +57,13 @@ public class CheckoutSessionService {
     }
 
     public boolean setUser(String id, String session) {
-        try {
-            CheckoutSession session1 = repository.findById(session).get();
-            session1.setUserId(id);
-            repository.save(session1);
-            return true;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        CheckoutSession checkoutSession = repository.findById(session)
+                .orElseThrow(() -> new IllegalArgumentException("Sessão inválida ou expirada"));
+        if (checkoutSession.getUserId() != null && !checkoutSession.getUserId().equals(id)) {
+            throw new IllegalStateException("Sessão já vinculada a outro usuário");
         }
-
+        checkoutSession.setUserId(id);
+        repository.save(checkoutSession);
+        return true;
     }
 }

@@ -1,23 +1,66 @@
 package com.jefiro.app247.infra.controller;
 
 import com.jefiro.app247.domain.model.dto.TerminalActivationResponse;
+import com.jefiro.app247.domain.model.dto.TerminalRequest;
+import com.jefiro.app247.domain.model.dto.TerminalResponseDTO;
 import com.jefiro.app247.infra.service.TerminalService;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.jefiro.app247.infra.service.MercadoPagoTerminalService;
+import com.jefiro.app247.infra.dto.mercadopago.VincularTerminalMercadoPagoRequest;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
-@RequestMapping("/terminal")
 public class TerminalController {
+    private final TerminalService service;
+    private final MercadoPagoTerminalService mercadoPagoTerminalService;
 
-    @Autowired
-    TerminalService service;
+    public TerminalController(TerminalService service, MercadoPagoTerminalService mercadoPagoTerminalService) {
+        this.service = service;
+        this.mercadoPagoTerminalService = mercadoPagoTerminalService;
+    }
 
-    @GetMapping("/serial/{serial}")
+    @GetMapping("/terminal/serial/{serial}")
     public ResponseEntity<TerminalActivationResponse> bySerial(@PathVariable String serial) {
         return ResponseEntity.ok(service.getBySerial(serial));
+    }
+
+    @PostMapping("/condominios/{condominioId}/terminais")
+    public ResponseEntity<TerminalResponseDTO> criar(@PathVariable String condominioId,
+                                                      @RequestBody @Valid TerminalRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.criar(condominioId, request));
+    }
+
+    @GetMapping("/condominios/{condominioId}/terminais")
+    public ResponseEntity<List<TerminalResponseDTO>> listar(@PathVariable String condominioId) {
+        return ResponseEntity.ok(service.listar(condominioId));
+    }
+
+    @GetMapping("/terminais/{terminalId}")
+    public ResponseEntity<TerminalResponseDTO> buscar(@PathVariable String terminalId) {
+        return ResponseEntity.ok(service.buscar(terminalId));
+    }
+
+    @PutMapping("/terminais/{terminalId}")
+    public ResponseEntity<TerminalResponseDTO> atualizar(@PathVariable String terminalId,
+                                                          @RequestBody @Valid TerminalRequest request) {
+        return ResponseEntity.ok(service.atualizar(terminalId, request));
+    }
+
+    @PutMapping("/terminais/{terminalId}/mercado-pago")
+    public ResponseEntity<TerminalResponseDTO> vincularMercadoPago(
+            @PathVariable String terminalId,
+            @RequestBody @Valid VincularTerminalMercadoPagoRequest request) {
+        return ResponseEntity.ok(mercadoPagoTerminalService.vincular(
+                terminalId, request.mercadoPagoTerminalId()));
+    }
+
+    @DeleteMapping("/terminais/{terminalId}/mercado-pago")
+    public ResponseEntity<Void> desvincularMercadoPago(@PathVariable String terminalId) {
+        mercadoPagoTerminalService.desvincular(terminalId);
+        return ResponseEntity.noContent().build();
     }
 }

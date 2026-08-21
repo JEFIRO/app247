@@ -6,7 +6,10 @@ import io.lettuce.core.dynamic.annotation.Param;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import jakarta.persistence.LockModeType;
+import java.util.Optional;
 
 public interface OrderRepository extends JpaRepository<Order, String> {
     @Query("""
@@ -21,5 +24,10 @@ public interface OrderRepository extends JpaRepository<Order, String> {
                 FROM Order o
                 WHERE o.user.idUser = :userId
             """)
-    Page<OrderDTO> findOrdersByUserId(@Param("userId") Long userId, Pageable pageable);
+    Page<OrderDTO> findOrdersByUserId(@Param("userId") String userId, Pageable pageable);
+    Optional<Order> findByCarrinhoIdCarrinho(String carrinhoId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select o from Order o where o.idOrder = :orderId")
+    Optional<Order> findByIdForUpdate(@Param("orderId") String orderId);
 }

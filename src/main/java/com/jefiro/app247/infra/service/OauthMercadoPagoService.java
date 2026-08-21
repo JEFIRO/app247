@@ -1,148 +1,140 @@
 package com.jefiro.app247.infra.service;
 
 import com.jefiro.app247.domain.model.MercadoPagoConta;
+import com.jefiro.app247.domain.model.auth.RoleUser;
 import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.dto.MercadoPagoTokenResponse;
-import com.jefiro.app247.domain.model.dto.OrderResponse;
-import com.jefiro.app247.domain.model.dto.mercadopago.*;
 import com.jefiro.app247.infra.repository.OauthMercadoPagoRepository;
-import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.jefiro.app247.infra.exception.ExternalServiceException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClientException;
 
-import java.math.BigDecimal;
-import java.net.URI;
 import java.time.Duration;
-import java.util.List;
+import java.time.LocalDateTime;
 import java.util.UUID;
-
 
 @Service
 public class OauthMercadoPagoService {
+    private static final String STATE_PREFIX = "oauth:mp:";
+
     @Value("${spring.mp.id}")
-    private String CLIENT_ID;
+    private String clientId;
     @Value("${spring.mp.redirect_url.oauth}")
-    private String REDIRECT_URI;
+    private String redirectUri;
     @Value("${spring.mp.id.secret}")
-    private String CLIENT_SECRET;
+    private String clientSecret;
 
-    @Autowired
-    private RedisTemplate<String, String> redisTemplate;
-    @Autowired
-    UserService userService;
-    @Autowired
-    OauthMercadoPagoRepository repository;
+    private final RedisTemplate<String, String> redisTemplate;
+    private final UserService userService;
+    private final OauthMercadoPagoRepository repository;
+    private final RestTemplate restTemplate;
 
-
-    public MercadoPagoConta getByEmpresa(String id) {
-        return repository.findByEmpresa_Id(id).orElseThrow();
+    public OauthMercadoPagoService(RedisTemplate<String, String> redisTemplate,
+                                   UserService userService,
+                                   OauthMercadoPagoRepository repository,
+                                   RestTemplate restTemplate) {
+        this.redisTemplate = redisTemplate;
+        this.userService = userService;
+        this.repository = repository;
+        this.restTemplate = restTemplate;
     }
 
+    public MercadoPagoConta getByEmpresa(String empresaId) {
+        MercadoPagoConta conta = repository.findByEmpresaId(empresaId)
+                .orElseThrow(() -> new IllegalStateException("Empresa não possui conta Mercado Pago autorizada"));
+        if (conta.getDataExpiracao() != null && !conta.getDataExpiracao().isAfter(LocalDateTime.now())) {
+            throw new IllegalStateException(
+                    "Autorização Mercado Pago expirada; realize uma nova autorização OAuth");
+        }
+        return conta;
+    }
 
-    private String iniciarAutorizacao(String user) {
+    public String url(User gestor) {
+        validarGestorDoContexto(gestor);
         String state = UUID.randomUUID().toString();
-
         redisTemplate.opsForValue().set(
-                "oauth:mp:" + state,
-                user,
+                STATE_PREFIX + state,
+                gestor.getIdUser() + "|" + gestor.getEmpresa().getId(),
                 Duration.ofMinutes(10)
         );
-        return state;
 
-    }
-
-    public String url(String usuarioId) {
-
-
-        String state = iniciarAutorizacao(usuarioId);
-
-        return "https://auth.mercadopago.com.br/authorization" +
-                "?client_id=" + CLIENT_ID +
-                "&response_type=code" +
-                "&platform_id=mp" +
-                "&state=" + state +
-                "&redirect_uri=" + REDIRECT_URI;
+        return "https://auth.mercadopago.com.br/authorization"
+                + "?client_id=" + clientId
+                + "&response_type=code"
+                + "&platform_id=mp"
+                + "&state=" + state
+                + "&redirect_uri=" + redirectUri;
     }
 
     @Transactional
     public void gerarToken(String code, String state) {
-
-        String key = "oauth:mp:" + state;
-
-        String userId = redisTemplate.opsForValue().get(key);
-        User user = userService.getUser(userId);
-        if (userId == null) {
+        String key = STATE_PREFIX + state;
+        String stateValue = redisTemplate.opsForValue().get(key);
+        if (stateValue == null) {
             throw new IllegalStateException("State inválido ou expirado");
         }
 
-        RestTemplate restTemplate = new RestTemplate();
+        String[] partes = stateValue.split("\\|", 2);
+        if (partes.length != 2) {
+            throw new IllegalStateException("State OAuth inválido");
+        }
+        String userId = partes[0];
+        String empresaId = partes[1];
+        User gestor = userService.getUser(userId);
+        if (gestor.getEmpresa() == null || !empresaId.equals(gestor.getEmpresa().getId()) || !isGestor(gestor)) {
+            throw new IllegalStateException("Gestor não pode autorizar Mercado Pago para esta empresa");
+        }
 
+        MercadoPagoTokenResponse token = trocarCodigo(code);
+        MercadoPagoConta conta = repository.findByEmpresaId(empresaId).orElseGet(MercadoPagoConta::new);
+        conta.atualizarCredenciais(token);
+        conta.setEmpresa(gestor.getEmpresa());
+        repository.save(conta);
+        redisTemplate.delete(key);
+    }
+
+    private MercadoPagoTokenResponse trocarCodigo(String code) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("client_id", CLIENT_ID);
-        body.add("client_secret", CLIENT_SECRET);
+        body.add("client_id", clientId);
+        body.add("client_secret", clientSecret);
         body.add("grant_type", "authorization_code");
         body.add("code", code);
-        body.add("redirect_uri", REDIRECT_URI);
+        body.add("redirect_uri", redirectUri);
 
-        HttpEntity<MultiValueMap<String, String>> request =
-                new HttpEntity<>(body, headers);
-
-        ResponseEntity<MercadoPagoTokenResponse> response =
-                restTemplate.postForEntity(
-                        "https://api.mercadopago.com/oauth/token",
-                        request,
-                        MercadoPagoTokenResponse.class
-                );
-
-
-        MercadoPagoConta mercadoPagoConta = new MercadoPagoConta(response.getBody());
-        mercadoPagoConta.setMpUserId(userId);
-        mercadoPagoConta.setEmpresa(user.getEmpresa());
-        repository.save(mercadoPagoConta);
-    }
-
-    public List<TerminalResponse> listarTerminais(String idUser) {
-        MercadoPagoConta mercadoPagoConta = repository.findByMpUserId(idUser).orElseThrow();
-        RestTemplate restTemplate = new RestTemplate();
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(mercadoPagoConta.getAccessToken());
-
-        HttpEntity<Void> entity =
-                new HttpEntity<>(headers);
-
-        ResponseEntity<ListaTerminaisResponse> response =
-                restTemplate.exchange("https://api.mercadopago.com/terminals/v1/list",
-                        HttpMethod.GET, entity, ListaTerminaisResponse.class);
-
-
-        System.out.println(response);
-
-        List<TerminalResponse> terminais =
-                response.getBody().data().terminals();
-        return terminais;
-    }
-
-    public Boolean setTerminal(String idUser, TerminalResponse response) {
+        ResponseEntity<MercadoPagoTokenResponse> response;
         try {
+            response = restTemplate.postForEntity(
+                    "https://api.mercadopago.com/oauth/token",
+                    new HttpEntity<>(body, headers),
+                    MercadoPagoTokenResponse.class
+            );
+        } catch (RestClientException e) {
+            throw new ExternalServiceException("Mercado Pago",
+                    "Falha ao trocar código OAuth", e);
+        }
+        if (response.getBody() == null) {
+            throw new IllegalStateException("Mercado Pago retornou OAuth sem corpo");
+        }
+        return response.getBody();
+    }
 
-            MercadoPagoConta mercadoPagoConta = repository.findByMpUserId(idUser).orElseThrow();
-            mercadoPagoConta.setTerminalId(response.id());
-            repository.save(mercadoPagoConta);
-            return true;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+    private void validarGestorDoContexto(User gestor) {
+        if (gestor == null || gestor.getEmpresa() == null
+                || !EmpresaContext.require().equals(gestor.getEmpresa().getId()) || !isGestor(gestor)) {
+            throw new IllegalStateException("Gestor não pode autorizar Mercado Pago para esta empresa");
         }
     }
 
+    private boolean isGestor(User user) {
+        return user.getRole() == RoleUser.ADMIN || user.getRole() == RoleUser.GERENTE;
+    }
 }

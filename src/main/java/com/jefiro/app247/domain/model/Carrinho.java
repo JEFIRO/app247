@@ -1,6 +1,7 @@
 package com.jefiro.app247.domain.model;
 
 import com.jefiro.app247.domain.model.enum_type.CarrinhoStatus;
+import com.jefiro.app247.domain.model.terminal.Terminal;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -33,7 +34,13 @@ public class Carrinho {
             orphanRemoval = true)
     private List<Item> items = new ArrayList<>();
 
-    private String idTerminal;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "id_terminal", nullable = false)
+    private Terminal terminal;
+
+    public String getIdTerminal() {
+        return terminal != null ? terminal.getIdTerminal() : null;
+    }
 
     @Enumerated(EnumType.STRING)
     private CarrinhoStatus status;
@@ -45,5 +52,22 @@ public class Carrinho {
         this.status = CarrinhoStatus.OPEN;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+    }
+
+    public void addItem(Item item) {
+        if (item == null) {
+            throw new IllegalArgumentException("Item não pode ser nulo");
+        }
+        if (items == null) {
+            items = new ArrayList<>();
+        }
+        item.setCarrinho(this);
+        items.add(item);
+    }
+
+    public void removeItem(Item item) {
+        if (items != null && items.remove(item)) {
+            item.setCarrinho(null);
+        }
     }
 }

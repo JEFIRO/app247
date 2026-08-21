@@ -19,7 +19,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 
 @Entity
-@Table(name = "produto")
+@Table(name = "produto", uniqueConstraints = @UniqueConstraint(
+        name = "uk_produto_empresa_codigo", columnNames = {"empresa_id", "codigo"}))
 public class Produto {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -31,11 +32,10 @@ public class Produto {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "grupo_tributario")
     private GrupoTributario grupoTributario;
-    @Column(unique = true)
+    @Column(nullable = false)
     private String codigo;
     private String nome;
     private BigDecimal preco;
-    private Integer quantidade;
     @Enumerated(EnumType.STRING)
     private UnidadeMedida unidadeMedida;
     @Enumerated(EnumType.STRING)
@@ -53,7 +53,6 @@ public class Produto {
         this.codigo = produtoDTO.codigo();
         this.nome = produtoDTO.nome();
         this.preco = produtoDTO.preco();
-        this.quantidade = produtoDTO.quantidade();
         this.unidadeMedida = UnidadeMedida.valueOf(produtoDTO.unidadeMedida().toUpperCase());
         this.categoria = ProdutoCategoria.valueOf(produtoDTO.categoria().toUpperCase());
         this.descricao = produtoDTO.descricao();

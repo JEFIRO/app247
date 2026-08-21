@@ -14,6 +14,6 @@ public record CheckoutSessionResponseDTO(
 
 ) {
     public CheckoutSessionResponseDTO(CheckoutSession cs) {
-        this(cs.getSessionId(), cs.getCartId(), cs.getTerminalId(), "app24por7://session/" + cs.getSessionId(), cs.getStatus(), cs.getExpiresAt());
+        this(cs.getSessionId(), cs.getCartId(), cs.getTerminalId(), "app247://session/" + cs.getSessionId(), cs.getStatus(), cs.getExpiresAt());
     }
 }

@@ -3,59 +3,71 @@ package com.jefiro.app247.infra.service;
 import com.jefiro.app247.domain.model.Condominio;
 import com.jefiro.app247.domain.model.Empresa;
 import com.jefiro.app247.domain.model.auth.Endereco;
-import com.jefiro.app247.domain.model.auth.RoleUser;
-import com.jefiro.app247.domain.model.auth.User;
-import com.jefiro.app247.domain.model.dto.CadastroCompletoRequest;
+import com.jefiro.app247.domain.model.dto.CondominioRequest;
 import com.jefiro.app247.domain.model.dto.CondominioResponse;
-import com.jefiro.app247.domain.model.dto.EnderecoResponse;
-import com.jefiro.app247.domain.model.terminal.Terminal;
 import com.jefiro.app247.infra.repository.CondominioRepository;
-import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class CondominioService {
-    @Autowired
-    CondominioRepository repository;
-    @Autowired
-    EmpresaService empresaService;
-    @Autowired
-    UserService userService;
+    private final CondominioRepository repository;
+    private final EmpresaService empresaService;
 
-    @Transactional
-    public boolean newCondominio(CadastroCompletoRequest request) {
-        try {
-            Empresa empresa = empresaService.newEmpresa(new Empresa(request.empresa()));
-
-            User user = new User(request.user());
-            user.setEmpresa(empresa);
-
-            userService.cadastrar(user, RoleUser.ADMIN);
-
-            Endereco endereco = new Endereco(request.condominio().endereco());
-            endereco.setEmpresa(empresa);
-
-            Condominio condominio = new Condominio(request.condominio(), endereco);
-            condominio.setEmpresa(empresa);
-
-            Terminal terminal = new Terminal(request.terminal());
-            terminal.setEmpresa(empresa);
-
-            condominio.addTerminal(terminal);
-            condominio.addUser(user);
-
-            repository.save(condominio);
-
-            return true;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+    public CondominioService(CondominioRepository repository, EmpresaService empresaService) {
+        this.repository = repository;
+        this.empresaService = empresaService;
     }
 
-    public Page<CondominioResponse> getCondominio(Pageable pageable) {
-        return repository.findAll(pageable).map(c -> new CondominioResponse(c.getIdCondominio(), c.getNome(), new EnderecoResponse(c.getEndereco())));
+    @Transactional
+    public CondominioResponse criar(CondominioRequest request) {
+        String empresaId = EmpresaContext.require();
+        Empresa empresa = empresaService.getEmpresa(empresaId);
+        Condominio condominio = construir(request, empresa);
+        return new CondominioResponse(repository.save(condominio));
+    }
+
+    public List<CondominioResponse> listar() {
+        return repository.findAllByEmpresaIdOrderByNome(EmpresaContext.require()).stream()
+                .map(CondominioResponse::new)
+                .toList();
+    }
+
+    public CondominioResponse buscar(String condominioId) {
+        return new CondominioResponse(buscarDoTenant(condominioId, EmpresaContext.require()));
+    }
+
+    @Transactional
+    public CondominioResponse atualizar(String condominioId, CondominioRequest request) {
+        Condominio condominio = buscarDoTenant(condominioId, EmpresaContext.require());
+        condominio.setNome(request.nome());
+        condominio.setCnpj(request.cnpj());
+        if (request.endereco() != null) {
+            Endereco endereco = new Endereco(request.endereco());
+            endereco.setEmpresa(condominio.getEmpresa());
+            condominio.setEndereco(endereco);
+        }
+        condominio.setUpdatedAt(LocalDateTime.now());
+        return new CondominioResponse(repository.save(condominio));
+    }
+
+    public Condominio buscarDoTenant(String condominioId, String empresaId) {
+        return repository.findByIdCondominioAndEmpresaId(condominioId, empresaId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Condomínio não encontrado"));
+    }
+
+    Condominio construir(CondominioRequest request, Empresa empresa) {
+        Endereco endereco = request.endereco() == null ? null : new Endereco(request.endereco());
+        if (endereco != null) {
+            endereco.setEmpresa(empresa);
+        }
+        Condominio condominio = new Condominio(request, endereco);
+        condominio.setEmpresa(empresa);
+        return condominio;
     }
 }
