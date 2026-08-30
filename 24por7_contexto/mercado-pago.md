@@ -64,7 +64,7 @@ O request contém:
 
 - `type: point`;
 - `external_reference`: ID da order local;
-- `expiration_time: PT15M`, configurável por `MP_POINT_EXPIRATION_TIME`;
+- `expiration_time: PT5M` na configuração atual, configurável por `MP_POINT_EXPIRATION_TIME`;
 - uma transação com o total;
 - `terminal_id` vindo de `Terminal.mercadoPagoTerminalId` e `print_on_terminal: no_ticket`;
 - `X-Idempotency-Key`: ID da order local;
@@ -182,6 +182,10 @@ O mapeamento externo foi centralizado em `MercadoPagoStatusMapper`:
 
 Os endpoints continuam sob `/api/testes/mercadopago` e continuam públicos pela política geral atual. Não devem ser habilitados em ambiente produtivo sem proteção adicional; veja [[autenticacao]].
 
+## Recuperação sem webhook
+
+A recuperação de pagamentos Point está detalhada em [[payment-reconciliation]]. Webhook continua sendo o caminho principal; startup, scheduler e `GET /order/{orderId}/status?terminalId=...` reutilizam `PaymentReconciliationService` e consultam `Order.mpOrderId`. O endpoint anterior lia somente o banco; agora estados não definitivos são reconciliados antes da resposta. Falha de rede mantém o estado pendente e uma nova chamada de cobrança reutiliza a cobrança anterior depois de tentar reconciliá-la.
+
 ## Erros tratados e lacunas
 
 - Criação Point rejeita Order sem empresa/terminal, terminal de outro tenant, maquininha não vinculada, resposta sem ID e status desconhecido.
@@ -195,4 +199,4 @@ Os endpoints continuam sob `/api/testes/mercadopago` e continuam públicos pela 
 - Versão externa, lock e máquina de estados protegem monotonicidade.
 - A chamada HTTP de criação ocorre durante fluxo transacional que também mantém a reserva local; lentidão externa pode prolongar a transação.
 
-`PT15M` foi confirmado na documentação oficial como duração ISO-8601 válida e padrão da API Orders Point; a faixa oficial é de 30 segundos a 3 horas. A resposta inicial oficial é `201` com status `created`, portanto nunca equivale a aprovação. Referências consultadas: [criação de order](https://www.mercadopago.com.br/developers/pt/reference/in-person-payments/point/orders/create-order/post), [status Point](https://www.mercadopago.com.br/developers/pt/docs/mp-point/resources/status-order-transaction) e [notificações](https://www.mercadopago.com.br/developers/pt/docs/mp-point/notifications).
+`PT15M` é o padrão documentado da API Orders Point, mas esta aplicação configura `PT5M`; ambos são durações ISO-8601 dentro da faixa oficial de 30 segundos a 3 horas. A resposta inicial oficial é `201` com status `created`, portanto nunca equivale a aprovação. Referências consultadas: [criação de order](https://www.mercadopago.com.br/developers/pt/reference/in-person-payments/point/orders/create-order/post), [status Point](https://www.mercadopago.com.br/developers/pt/docs/mp-point/resources/status-order-transaction) e [notificações](https://www.mercadopago.com.br/developers/pt/docs/mp-point/notifications).

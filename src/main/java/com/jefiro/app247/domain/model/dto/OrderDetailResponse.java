@@ -15,6 +15,8 @@ public record OrderDetailResponse(
         BigDecimal subtotal,
         BigDecimal desconto,
         BigDecimal total,
+        BigDecimal totalCalculado,
+        BigDecimal totalCobrado,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         LocalDateTime paidAt,
@@ -25,6 +27,7 @@ public record OrderDetailResponse(
 ) {
     public OrderDetailResponse(Order order) {
         this(order.getIdOrder(), order.getStatus(), order.getSubtotal(), order.getDesconto(), order.getTotal(),
+                order.getTotalCalculado(), order.getTotalCobrado(),
                 order.getCreatedAt(), order.getUpdatedAt(), order.getPaidAt(), order.getMpOrderId(),
                 order.getMpEventVersion(), order.getCarrinho() != null ? new CarrinhoResponseDTO(order.getCarrinho()) : null,
                 order.getPagamento() != null ? new PaymentSummary(

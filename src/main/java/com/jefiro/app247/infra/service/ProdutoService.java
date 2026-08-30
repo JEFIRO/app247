@@ -1,25 +1,28 @@
 package com.jefiro.app247.infra.service;
 
 import com.jefiro.app247.domain.model.Empresa;
-import com.jefiro.app247.domain.model.GrupoTributario;
 import com.jefiro.app247.domain.model.Produto;
 import com.jefiro.app247.domain.model.dto.CreateProductDTO;
+import com.jefiro.app247.domain.model.enum_type.ProdutoCatalogChangeReason;
 import com.jefiro.app247.domain.model.enum_type.ProdutoCategoria;
 import com.jefiro.app247.domain.model.enum_type.UnidadeMedida;
+import com.jefiro.app247.infra.event.ProdutoCatalogChangedEvent;
+import com.jefiro.app247.infra.repository.EstoqueCondominioRepository;
 import com.jefiro.app247.infra.repository.ProdutoRepository;
-import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class ProdutoService {
@@ -30,7 +33,12 @@ public class ProdutoService {
     private FileStorageService fileStorageService;
     @Autowired
     EmpresaService empresaService;
+    @Autowired
+    private EstoqueCondominioRepository estoqueRepository;
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
 
+    @Transactional
     public Produto salvar(CreateProductDTO produtoDTO, MultipartFile file) throws IOException {
         if (produtoDTO == null) {
             return null;
@@ -50,9 +58,12 @@ public class ProdutoService {
         produto.setCodigo(codigo);
         produto.setEmpresa(empresaService.getEmpresa(empresaId));
         produto.setFoto(urlImagem);
-        return produtoRepository.save(produto);
+        Produto salvo = produtoRepository.saveAndFlush(produto);
+        publicar(salvo.getIdProduto(), ProdutoCatalogChangeReason.PRODUCT_CREATED, Set.of());
+        return salvo;
     }
 
+    @Transactional
     public List<Produto> salvarList(List<CreateProductDTO> produtoList) {
         if (produtoList.isEmpty()) {
             throw new RuntimeException("a lista não pode esta vazia");
@@ -65,6 +76,7 @@ public class ProdutoService {
         return produtoRepository.saveAll(produto);
     }
 
+    @Transactional
     public Produto atualizar(String id, CreateProductDTO dto, MultipartFile file) throws IOException {
         String empresaId = EmpresaContext.require();
         Produto produto = produtoRepository.findByIdProdutoAndEmpresaId(id, empresaId)
@@ -92,7 +104,7 @@ public class ProdutoService {
         }
 
         if (dto.preco() != null && dto.preco().compareTo(BigDecimal.ZERO) > 0) {
-            produto.setPreco(dto.preco());
+            produto.setPreco(MoneyPolicy.persistence(dto.preco()));
         }
 
         if (dto.unidadeMedida() != null && !dto.unidadeMedida().trim().isEmpty()) {
@@ -124,7 +136,28 @@ public class ProdutoService {
             produto.setFoto(urlImagem);
         }
 
-        return produtoRepository.save(produto);
+        Set<String> condominios = Set.copyOf(
+                estoqueRepository.findActiveCondominiumIdsByProductId(produto.getIdProduto()));
+        Produto salvo = produtoRepository.saveAndFlush(produto);
+        publicar(salvo.getIdProduto(), ProdutoCatalogChangeReason.PRODUCT_UPDATED, condominios);
+        return salvo;
+    }
+
+    @Transactional
+    public Produto alterarDisponibilidade(String id, boolean ativo) {
+        String empresaId = EmpresaContext.require();
+        Produto produto = produtoRepository.findByIdProdutoAndEmpresaId(id, empresaId)
+                .orElseThrow(() -> new RuntimeException("Produto não encontrado"));
+        if (produto.isStatus() == ativo) return produto;
+
+        Set<String> condominios = Set.copyOf(
+                estoqueRepository.findActiveCondominiumIdsByProductId(produto.getIdProduto()));
+        produto.setStatus(ativo);
+        Produto salvo = produtoRepository.saveAndFlush(produto);
+        publicar(salvo.getIdProduto(), ativo
+                ? ProdutoCatalogChangeReason.PRODUCT_ACTIVATED
+                : ProdutoCatalogChangeReason.PRODUCT_DEACTIVATED, condominios);
+        return salvo;
     }
 
     public Page<Produto> listar(Pageable pageable) {
@@ -145,17 +178,12 @@ public class ProdutoService {
                 .orElseThrow(() -> new RuntimeException("Produto não existe"));
     }
 
-    public List<Produto> sync(String lastSync) {
-        try {
-            var data = LocalDateTime.parse(lastSync);
-            return produtoRepository.findAllByUpdateAtAfterAndEmpresaId(data, EmpresaContext.require());
-        } catch (java.time.format.DateTimeParseException e) {
-            throw new IllegalArgumentException("lastSync deve estar no formato ISO-8601", e);
-        }
-    }
-
     public List<Produto> findTop10ByOrderByCreatedAtDesc() {
         return produtoRepository.findTop10ByEmpresaIdOrderByCreateAtDesc(EmpresaContext.require());
 
+    }
+
+    private void publicar(String produtoId, ProdutoCatalogChangeReason motivo, Set<String> condominios) {
+        eventPublisher.publishEvent(new ProdutoCatalogChangedEvent(produtoId, motivo, condominios));
     }
 }

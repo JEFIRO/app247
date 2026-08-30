@@ -36,11 +36,20 @@ public class Order {
     @Column(length = 36)
     private String idTerminal;
 
+    @Column(precision = 15, scale = 6)
     private BigDecimal subtotal;
 
+    @Column(precision = 15, scale = 6)
     private BigDecimal desconto;
 
+    @Column(precision = 15, scale = 6)
     private BigDecimal total;
+
+    @Column(name = "total_calculado", precision = 15, scale = 6)
+    private BigDecimal totalCalculado;
+
+    @Column(name = "total_cobrado", precision = 15, scale = 6)
+    private BigDecimal totalCobrado;
 
     @Enumerated(EnumType.STRING)
     private OriginRequest originRequest;
@@ -100,6 +109,8 @@ public class Order {
         if (total == null) {
             total = subtotal;
         }
+        if (totalCalculado == null) totalCalculado = total;
+        if (totalCobrado == null) totalCobrado = total;
     }
 
     @PreUpdate
@@ -108,17 +119,28 @@ public class Order {
     }
 
     public Order(Carrinho carrinho, User user) {
-        this.carrinho = carrinho;
+        this(carrinho);
         this.user = user;
-        this.subtotal = carrinho.getSubtotal();
-        this.total = carrinho.getSubtotal();
     }
 
     public Order(Carrinho carrinho) {
         this.carrinho = carrinho;
         this.empresa = carrinho.getEmpresa();
-        this.total = carrinho.getSubtotal();
+        atualizarTotaisDoCarrinho();
         this.idTerminal = carrinho.getIdTerminal();
         this.setOriginRequest(OriginRequest.TERMINAL);
+    }
+
+    public void atualizarTotaisDoCarrinho() {
+        this.subtotal = carrinho.getItems().stream()
+                .map(item -> item.getOriginalPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        this.subtotal = com.jefiro.app247.infra.service.MoneyPolicy.persistence(subtotal);
+        this.totalCalculado = carrinho.getSubtotal();
+        this.totalCobrado = com.jefiro.app247.infra.service.MoneyPolicy
+                .chargedForPersistence(totalCalculado);
+        this.desconto = com.jefiro.app247.infra.service.MoneyPolicy.persistence(
+                subtotal.subtract(totalCalculado));
+        this.total = totalCobrado;
     }
 }

@@ -19,12 +19,14 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import com.jefiro.app247.infra.exception.PriceChangedException;
 
 @ExtendWith(MockitoExtension.class)
 class CarrinhoServiceTest {
     @Mock CarrinhoRepository repository;
     @Mock ProdutoService produtoService;
     @Mock TerminalRepository terminalRepository;
+    @Mock PricingService pricingService;
     @InjectMocks CarrinhoService service;
 
     @Test
@@ -34,6 +36,8 @@ class CarrinhoServiceTest {
         Produto produto = produto("produto-a", empresa, "7.50");
         when(terminalRepository.findById("terminal-a")).thenReturn(Optional.of(terminal));
         when(produtoService.buscarPorIdDoTenant("produto-a", "empresa-a")).thenReturn(produto);
+        when(pricingService.calcular(eq(produto), eq(terminal.getCondominio()), any()))
+                .thenReturn(precoNormal(produto));
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         Carrinho carrinho = service.save(new CarrinhoRequest("terminal-a",
@@ -41,8 +45,8 @@ class CarrinhoServiceTest {
         produto.setPreco(new BigDecimal("99.00"));
 
         assertEquals(empresa, carrinho.getEmpresa());
-        assertEquals(new BigDecimal("15.00"), carrinho.getSubtotal());
-        assertEquals(new BigDecimal("7.50"), carrinho.getItems().get(0).getUnitPrice());
+        assertEquals(new BigDecimal("15.000000"), carrinho.getSubtotal());
+        assertEquals(new BigDecimal("7.500000"), carrinho.getItems().get(0).getUnitPrice());
         assertEquals(UnidadeMedida.UN, carrinho.getItems().get(0).getUnidadeMedida());
         assertEquals(carrinho, carrinho.getItems().get(0).getCarrinho());
         assertEquals(produto, carrinho.getItems().get(0).getProduto());
@@ -51,9 +55,12 @@ class CarrinhoServiceTest {
     @Test
     void rejeitaProdutoDuplicadoNoMesmoCarrinho() {
         Empresa empresa = Empresa.builder().id("empresa-a").build();
-        when(terminalRepository.findById("terminal-a")).thenReturn(Optional.of(terminal(empresa)));
+        Terminal terminal = terminal(empresa);
+        when(terminalRepository.findById("terminal-a")).thenReturn(Optional.of(terminal));
         when(produtoService.buscarPorIdDoTenant("produto-a", "empresa-a"))
                 .thenReturn(produto("produto-a", empresa, "5.00"));
+        when(pricingService.calcular(any(), eq(terminal.getCondominio()), any()))
+                .thenAnswer(call -> precoNormal(call.getArgument(0)));
         CarrinhoRequest request = new CarrinhoRequest("terminal-a", List.of(
                 new ItemRequest("produto-a", 1, null), new ItemRequest("produto-a", 1, null)));
 
@@ -84,6 +91,28 @@ class CarrinhoServiceTest {
         assertThrows(IllegalStateException.class, () -> service.validarParaPagamento(carrinho));
     }
 
+    @Test
+    void rejeitaAumentoDePrecoParaExigirNovaConfirmacao() {
+        Empresa empresa = Empresa.builder().id("empresa-a").build();
+        Terminal terminal = terminal(empresa);
+        Produto produto = produto("produto-a", empresa, "10.99");
+        when(terminalRepository.findById("terminal-a")).thenReturn(Optional.of(terminal));
+        when(produtoService.buscarPorIdDoTenant("produto-a", "empresa-a")).thenReturn(produto);
+        when(pricingService.calcular(eq(produto), eq(terminal.getCondominio()), any()))
+                .thenReturn(new com.jefiro.app247.domain.model.dto.PrecoCalculado(
+                        produto, new BigDecimal("10.990000"), new BigDecimal("10.990000"),
+                        new BigDecimal("0.000000"), null));
+
+        PriceChangedException erro = assertThrows(PriceChangedException.class, () -> service.save(
+                new CarrinhoRequest("terminal-a", List.of(new ItemRequest(
+                        "produto-a", 1, null, new BigDecimal("10.165750"))))));
+
+        assertTrue(erro.getMessage().contains("confirme novamente"));
+        assertEquals(new BigDecimal("10.990000"), erro.getItems().get(0).precoAtual());
+        assertTrue(erro.getItems().get(0).aumentou());
+        verify(repository, never()).save(any());
+    }
+
     private Terminal terminal(Empresa empresa) {
         Condominio condominio = new Condominio();
         condominio.setIdCondominio("cond-a");
@@ -103,5 +132,11 @@ class CarrinhoServiceTest {
         produto.setPreco(new BigDecimal(preco));
         produto.setUnidadeMedida(UnidadeMedida.UN);
         return produto;
+    }
+
+    private com.jefiro.app247.domain.model.dto.PrecoCalculado precoNormal(Produto produto) {
+        BigDecimal valor = MoneyPolicy.persistence(produto.getPreco());
+        return new com.jefiro.app247.domain.model.dto.PrecoCalculado(
+                produto, valor, valor, MoneyPolicy.persistence(BigDecimal.ZERO), null);
     }
 }

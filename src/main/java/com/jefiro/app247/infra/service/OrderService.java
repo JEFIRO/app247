@@ -18,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.NoSuchElementException;
+import java.util.Optional;
 
 @Service
 public class OrderService {
@@ -42,6 +43,8 @@ public class OrderService {
         if (repository.findByCarrinhoIdCarrinho(carrinhoId).isPresent()) {
             throw new IllegalStateException("Carrinho já possui Order");
         }
+
+        carrinhoService.reprecificarParaCheckout(carrinho);
 
         carrinho.setStatus(CarrinhoStatus.READY_FOR_PAYMENT);
 
@@ -90,8 +93,13 @@ public class OrderService {
     @Transactional
     public Order criarCobranca(Carrinho carrinho) {
         carrinhoService.validarParaPagamento(carrinho);
+        carrinhoService.reprecificarParaCheckout(carrinho);
         Order order = repository.findByCarrinhoIdCarrinho(carrinho.getIdCarrinho())
                 .orElseGet(() -> createOrder(carrinho.getIdCarrinho(), null));
+        if (order.getCarrinho() != null) {
+            order.atualizarTotaisDoCarrinho();
+            repository.save(order);
+        }
         if (order.getMpOrderId() != null) {
             return order;
         }
@@ -107,8 +115,17 @@ public class OrderService {
         return repository.findById(id_order).orElseThrow(() -> new NoSuchElementException("Order não existe"));
     }
 
+    public Optional<Order> findByCarrinho(String carrinhoId) {
+        return repository.findByCarrinhoIdCarrinho(carrinhoId);
+    }
+
     public Order getOrderForUpdate(String idOrder) {
         return repository.findByIdForUpdate(idOrder)
+                .orElseThrow(() -> new NoSuchElementException("Order não existe"));
+    }
+
+    public Order getOrderForReconciliation(String idOrder) {
+        return repository.findByIdForReconciliation(idOrder)
                 .orElseThrow(() -> new NoSuchElementException("Order não existe"));
     }
 

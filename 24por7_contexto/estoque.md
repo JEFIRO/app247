@@ -13,7 +13,11 @@ Empresa
         └── Produto
 ```
 
-`Produto` pertence a uma empresa e não guarda quantidade. `EstoqueCondominio` associa um produto a um condomínio, contém quantidade decimal e `ativo`, e possui unicidade `(condominio_id, produto_id)`. Produto e condomínio precisam pertencer à mesma empresa.
+`Produto` pertence a uma empresa e não guarda quantidade. `EstoqueCondominio` associa um produto a um condomínio, contém quantidade decimal, `ativo`, `createdAt` e `updatedAt`, e possui unicidade `(condominio_id, produto_id)`. Produto e condomínio precisam pertencer à mesma empresa.
+
+Disponibilidade não depende de saldo positivo: inclusive `quantidade=-1` com `ativo=true` continua disponível. A disponibilidade de catálogo exige somente associação ativa e produto global ativo.
+
+Para o Terminal, a seleção é sempre `Terminal -> Condomínio -> EstoqueCondominio -> Produto`. Produto existente apenas na Empresa não aparece sem associação no condomínio. Consequentemente, FULL SYNC vazio é estado válido quando não há vínculos, e não deve ser confundido com falha HTTP.
 
 O saldo geral da empresa não é persistido separadamente. `EstoqueCondominioRepository` calcula `SUM(quantidade) GROUP BY produto` no banco.
 
@@ -53,7 +57,9 @@ Cada efeito por item usa chave única:
 
 `movimentacao_estoque.chave_idempotencia` possui `UNIQUE`, protegendo contra reentregas e concorrência além da deduplicação temporária do Redis. O saldo é carregado com `PESSIMISTIC_WRITE` dentro de transação, serializando vendas simultâneas do mesmo produto no mesmo condomínio.
 
-A notificação ao Terminal é registrada somente depois da persistência e executada em `AFTER_COMMIT`. Terminal desconectado não reverte a movimentação; ele recupera o estado persistido pelo endpoint de status. Webhook duplicado ou estado sem mudança não publica nova movimentação nem novo `PaymentEvent`.
+A movimentação de quantidade (`ENTRADA`, `AJUSTE`, `RESERVA`, `VENDA`, liberação ou cancelamento) não altera `EstoqueCondominio.updatedAt` e não dispara sync de catálogo. Quantidade tem ciclo próprio e não deve causar uma invalidação para cada venda.
+
+Alterações de disponibilidade usam `EstoqueCondominio.alterarDisponibilidade`, atualizam `updatedAt` em UTC e publicam `ProdutoCatalogChangedEvent`. A entrega ao Terminal ocorre somente em `AFTER_COMMIT`; rollback não envia mensagem. Terminal desconectado recupera as mudanças persistidas por `GET /produtos/sync`.
 
 ## APIs administrativas
 
@@ -61,6 +67,7 @@ A notificação ao Terminal é registrada somente depois da persistência e exec
 - `POST /condominios/{condominioId}/estoque` — disponibiliza produto e registra entrada inicial;
 - `POST /condominios/{condominioId}/estoque/{produtoId}/entrada` — acrescenta quantidade;
 - `PUT /condominios/{condominioId}/estoque/{produtoId}` — ajuste para saldo absoluto;
+- `DELETE /condominios/{condominioId}/estoque/{produtoId}` — soft delete da disponibilidade e tombstone para sync;
 - `GET /condominios/{condominioId}/estoque/movimentacoes` — auditoria cronológica do condomínio;
 - `GET /estoque/geral` — soma por produto na empresa autenticada.
 
@@ -73,3 +80,7 @@ V20 cria `estoque_condominio` e `movimentacao_estoque`, adiciona as FKs `item.id
 O saldo antigo só é migrado automaticamente quando a empresa possui exatamente um condomínio. Para empresas com mais de um condomínio não há destino comprovável, portanto a migration não duplica nem distribui o valor legado.
 
 O campo `quantidade` permanece temporariamente opcional em `CreateProductDTO` apenas para desserializar clientes antigos; ele está depreciado e não altera estoque. Estoque inicial deve ser cadastrado pela API do condomínio.
+
+## Migração V24
+
+V24 acrescenta `created_at` e `updated_at` com microssegundos a `estoque_condominio`, aumenta a precisão dos timestamps de `produto` para microssegundos e cria índices para as janelas incrementais. A remoção lógica mantém a linha e permite que o Terminal receba `REMOVE`; exclusão física direta não faz parte do caso de uso suportado porque eliminaria o tombstone.

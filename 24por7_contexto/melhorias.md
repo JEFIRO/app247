@@ -297,3 +297,13 @@ Os testes existentes cobrem bem mapeamentos Mercado Pago principais, hierarquia 
 - Solução: validação redundante no DTO e service, recálculo do subtotal sob lock e classificação interna sanitizada para autenticação, terminal, cobrança ativa, idempotência, payload, timeout e indisponibilidade.
 - Arquivos: `CarrinhoRequest`, `ItemRequest`, `CarrinhoService`, `OrderService`, `ExternalServiceException`, `ExternalFailureType` e `MercadoPagoCobrancaService`.
 - Testes: carrinho vazio, subtotal divergente e `already_queued_order_for_terminal`.
+
+## MEL-023 — Invalidação e sincronização recuperável de catálogo
+
+- Status: `IMPLEMENTADA` em 24 de agosto de 2026 no backend e no Terminal Python.
+- Prioridade: `P0`; complexidade: `MÉDIA`.
+- Solução backend: evento de aplicação direcionado por condomínio, listener `AFTER_COMMIT`, `PRODUCT_SYNC_REQUIRED` no socket já existente, cursor `Instant` gerado pelo servidor e alterações `UPSERT/REMOVE` por Terminal.
+- Persistência: soft delete em `EstoqueCondominio`, timestamps e índices da migration V24. Movimentações de quantidade permanecem fora do catálogo.
+- Testes: atualização global em um/dois condomínios, produto sem associação, associação, remoção, sync atualizado/removido e rollback.
+- Terminal: roteamento por tipo, FULL/INCREMENTAL atômico, cursor do servidor, `sync_in_progress + sync_pending` e marcador persistente de cache inicializado/consistente concluídos. Veja [[sincronizacao-produtos]].
+- Evolução futura: coalescência com janela curta se operações em lote passarem a gerar volume significativo; distribuição das sessões WebSocket se houver múltiplas réplicas.

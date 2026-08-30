@@ -160,6 +160,7 @@ Order não possui coleção própria de snapshots. O histórico depende dos iten
 - `MercadoPagoCobrancaEvent` também é síncrono; a chamada HTTP acontece dentro do fluxo transacional de cobrança.
 - `UserCreatedEvent` é assíncrono e envia SMTP sem fila Redis.
 - `PaymentEvent` é publicado pelo webhook quando o estado muda; listeners nativo/STOMP executam após commit.
+- `ProdutoCatalogChangedEvent` é publicado por alterações globais do produto e por associação/desassociação no condomínio. `ProdutoCatalogNotificationService` o consome em `AFTER_COMMIT`, resolve os Terminais somente dos condomínios capturados no evento e envia `PRODUCT_SYNC_REQUIRED` pelo socket nativo já existente.
 
 ## Redis e workers
 
@@ -186,6 +187,10 @@ O sistema mantém dois modelos paralelos:
 
 Sessões são locais à JVM e não há autenticação no handshake. O heartbeat atualiza terminal globalmente pelo ID recebido na mensagem. Veja [[websocket]].
 
+Desde 24 de agosto de 2026, `/terminal-socket` confirma cada heartbeat somente após `TerminalService.updateStatus` persistir e executar flush. O ACK contém o UUID, status e `lastPing` ISO-8601, permitindo que o cliente diferencie envio ao socket de atualização efetiva do banco.
+
+O canal `/payment-socket/{terminalId}` também transporta invalidação de catálogo. Ele continua direcionado por Terminal e não carrega o produto completo. Após receber `PRODUCT_SYNC_REQUIRED`, o cliente consulta `GET /produtos/sync`, cuja resolução `Terminal -> Condominio` e os timestamps de `Produto`/`EstoqueCondominio` formam a fonte recuperável quando o socket esteve offline. Veja [[sincronizacao-produtos]].
+
 ## Persistência e evolução
 
 Hibernate está configurado como `ddl-auto=update` em dev e produção, simultaneamente ao Flyway. Isso reduz a confiabilidade das migrations como representação exclusiva do schema. Há divergências entre JPA e SQL e modificações locais em migrations históricas; detalhes em [[banco-de-dados]] e [[auditoria-bugs]].
@@ -197,7 +202,7 @@ Hibernate está configurado como `ddl-auto=update` em dev e produção, simultan
 ## Observabilidade atual
 
 - Actuator está no classpath, sem métricas de negócio implementadas.
-- Há `System.out.println`, `printStackTrace` e alguns logs SLF4J apenas no estoque.
+- Catálogo e sync possuem logs estruturados `[PRODUCT-CATALOG]` e `[PRODUCT-SYNC]`; ainda há saídas diretas em outras áreas legadas.
 - Não existe correlation ID configurado.
 - O ID local da Order é `external_reference` e `X-Idempotency-Key`, o que permite correlação manual com Mercado Pago.
 - Não há métricas para fila, retries, latência externa, webhooks ou estoque negativo.

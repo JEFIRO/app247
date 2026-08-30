@@ -23,7 +23,6 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
-import java.math.RoundingMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,7 +79,8 @@ public class MercadoPagoCobrancaService {
                 "Venda PDV",
                 new OrderRequest.TransactionsRequest(
                         List.of(new OrderRequest.PaymentRequest(
-                                order.getTotal().setScale(2, RoundingMode.HALF_UP).toPlainString()))
+                                MoneyPolicy.charged(order.getTotalCobrado() != null
+                                        ? order.getTotalCobrado() : order.getTotal()).toPlainString()))
                 ),
                 new OrderRequest.ConfigRequest(
                         new OrderRequest.PointRequest(terminal.getMercadoPagoTerminalId(), "no_ticket")

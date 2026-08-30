@@ -265,7 +265,7 @@ Segurança recomendada, não implementada: restringir operações de usuário ao
 
 # Produtos
 
-Todos os endpoints `/produtos/**` estão públicos temporariamente na camada HTTP, mas derivam a empresa de `EmpresaContext` e não inventam tenant quando o contexto está ausente.
+Os endpoints administrativos de `/produtos/**` estão públicos temporariamente na camada HTTP e derivam a empresa de `EmpresaContext`. A exceção é o sync do Terminal, que deriva empresa e condomínio da identidade física `uuidTerminal`.
 
 ## POST /produtos
 
@@ -300,13 +300,38 @@ Todos os endpoints `/produtos/**` estão públicos temporariamente na camada HTT
 
 - Entrada multipart igual ao cadastro.
 - Resposta: `200 ProdutoResponse`.
-- Efeitos: atualiza catálogo; quantidade legada não é usada.
+- Efeitos: atualiza catálogo e `Produto.updateAt`; após commit notifica somente os Terminais dos condomínios com associação ativa.
 - Conflito: tentativa de usar o código de outro produto da empresa retorna `409`.
 
-## GET /produtos/sync?lastSync={ISO_LOCAL_DATE_TIME}
+## PATCH /produtos/{id}/disponibilidade
 
-- Resposta: lista de `ProdutoResponse` alterados depois da data no tenant.
-- Erro de parse retorna `400` com indicação de ISO-8601.
+- Body: `{ "ativo": false }`.
+- Resposta: `200 ProdutoResponse`.
+- Efeito: ativa/desativa globalmente o produto. A desativação produz `REMOVE` no sync de todos os condomínios que ainda possuíam associação ativa.
+
+## GET /produtos/sync?uuidTerminal={uuid}&lastSync={ISO_INSTANT opcional}
+
+- Controller/service: `ProdutoController.sync` → `ProdutoSyncService.sincronizar`.
+- Identidade: busca global do Terminal pelo UUID e deriva `Terminal -> Condominio`; não usa `EmpresaContext`.
+- Sem `lastSync`: full sync dos produtos atualmente disponíveis (`EstoqueCondominio.ativo=true` e `Produto.status=true`).
+- Com `lastSync`: consulta associações cujo `EstoqueCondominio.updatedAt` ou `Produto.updateAt` esteja em `(lastSync, syncAt]`.
+- `lastSync` e `syncAt` usam `Instant` UTC; o cliente deve persistir exclusivamente o `syncAt` devolvido pelo backend.
+- Resposta:
+
+```json
+{
+  "syncAt": "2026-08-24T16:50:32.123Z",
+  "fullSync": false,
+  "changes": [
+    { "productId": "123", "operation": "UPSERT", "produto": { "id": "123" } },
+    { "productId": "456", "operation": "REMOVE", "produto": null }
+  ]
+}
+```
+
+`UPSERT` contém `ProdutoSyncItem`, composto pelos dados globais do produto e `quantidade` da associação. `REMOVE` é tombstone idempotente. Quantidade é informativa neste contrato: baixas de venda, entradas e ajustes não alteram o cursor de catálogo nem disparam `PRODUCT_SYNC_REQUIRED`.
+
+`200` com `fullSync=true` e `changes=[]` é resposta válida quando o condomínio do Terminal não possui associação ativa com produto ativo. Produto existente apenas no catálogo da empresa não entra no resultado. O serviço registra `terminalUuid`, Terminal resolvido, condomínio, empresa, janela, modo, associações encontradas e mudanças, sem registrar credenciais.
 
 ## GET /produtos/home
 
@@ -325,7 +350,7 @@ Todos estão públicos temporariamente na camada HTTP; condomínio e produto con
 
 - Body `EstoqueRequest`: `produtoId`, `quantidade` decimal.
 - Resposta: `200 EstoqueResponse`.
-- Efeitos: cria disponibilidade e movimento `ENTRADA`; aceita saldo inicial negativo.
+- Efeitos: cria ou reativa disponibilidade e movimento `ENTRADA`; aceita saldo inicial negativo; publica notificação de catálogo após commit apenas para o condomínio informado.
 - Erros: produto já disponível ou tenant inválido; exceções de negócio não possuem handler específico.
 
 ## POST /condominios/{condominioId}/estoque/{produtoId}/entrada
@@ -338,6 +363,12 @@ Todos estão públicos temporariamente na camada HTTP; condomínio e produto con
 
 - Body: quantidade absoluta desejada e motivo.
 - Efeito: lock pessimista e movimento `AJUSTE`; saldo negativo é permitido.
+
+## DELETE /condominios/{condominioId}/estoque/{produtoId}
+
+- Resposta: `200 EstoqueResponse` com `ativo=false`.
+- Efeito: soft delete da disponibilidade, preservando a associação como tombstone; após commit notifica somente os Terminais daquele condomínio.
+- Idempotência: repetir sobre associação já inativa não publica novo evento.
 
 ## GET /condominios/{condominioId}/estoque/movimentacoes
 
@@ -443,6 +474,10 @@ Este GET é um alias legado. Novas versões do Terminal devem usar o POST abaixo
 
 ## GET /order/{orderId}/status?terminalId={terminalId}
 
+O backend valida a correlação entre Order e Terminal. Para `PENDING`, `CREATED`, `AT_TERMINAL` ou `ACTION_REQUIRED`, consulta a Order Point por `Order.mpOrderId` antes de responder. Falha temporária do Mercado Pago preserva o estado intermediário e retorna `reconciled=false`; status definitivo local não gera consulta desnecessária.
+
+Resposta `PaymentStatusResponse`: `type`, `orderId`, `paymentId`, `terminalId`, `status`, `mercadoPagoStatus`, `transactionId`, `statusDetail`, `message`, `updatedAt` e `reconciled`. Nenhuma credencial OAuth é exposta. Veja [[payment-reconciliation]].
+
 - Finalidade: recuperar o estado após perda/reconexão do WebSocket sem criar nova cobrança.
 - Segurança HTTP: pública temporariamente; o terminal informado precisa ser exatamente o terminal do carrinho da Order.
 - Resposta: o mesmo `PointPaymentResponse` usado no início e no WebSocket.
@@ -544,7 +579,8 @@ Falhas HTTP, de conexão ou timeout na integração são traduzidas para respost
 
 - WebSocket nativo, origem `*`, sem autenticação.
 - Entrada: `{ "terminalId": "uuid", "status": "ONLINE|OFFLINE|MANUTENCAO" }`.
-- Efeito: atualiza status e heartbeat por busca global do terminal.
+- Efeito: atualiza `status`, `update_at` e `lastPing` por busca global do terminal, com transação e `saveAndFlush`.
+- Saída após persistência: `{ "type":"HEARTBEAT_ACK", "terminalId":"uuid", "status":"ONLINE", "lastPing":"ISO_LOCAL_DATE_TIME" }`.
 
 ## /payment-socket/{terminalId}
 

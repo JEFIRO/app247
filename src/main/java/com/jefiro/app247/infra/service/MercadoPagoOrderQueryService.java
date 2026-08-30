@@ -8,6 +8,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.client.RestClientException;
 
@@ -18,6 +19,8 @@ public class MercadoPagoOrderQueryService {
 
     private final OauthMercadoPagoRepository contaRepository;
     private final RestTemplate restTemplate;
+    @Autowired
+    private OauthMercadoPagoService oauthMercadoPagoService;
 
     public MercadoPagoOrderQueryService(
             OauthMercadoPagoRepository contaRepository,
@@ -40,16 +43,35 @@ public class MercadoPagoOrderQueryService {
                         "Conta Mercado Pago não encontrada para user_id=" + mercadoPagoUserId
                 ));
 
+        return getOrder(conta, mercadoPagoOrderId);
+    }
+
+    public OrderResponse getOrderByEmpresa(String empresaId, String mercadoPagoOrderId) {
+        if (empresaId == null || empresaId.isBlank()) {
+            throw new IllegalArgumentException("Order local sem empresa");
+        }
+        MercadoPagoConta conta = oauthMercadoPagoService.getByEmpresa(empresaId);
+        return getOrder(conta, mercadoPagoOrderId);
+    }
+
+    private OrderResponse getOrder(MercadoPagoConta conta, String mercadoPagoOrderId) {
+        if (mercadoPagoOrderId == null || mercadoPagoOrderId.isBlank()) {
+            throw new IllegalArgumentException("Order local sem mpOrderId");
+        }
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(conta.getAccessToken());
 
         try {
-            return restTemplate.exchange(
+            OrderResponse response = restTemplate.exchange(
                     ORDERS_URL + mercadoPagoOrderId,
                     HttpMethod.GET,
                     new HttpEntity<Void>(headers),
                     OrderResponse.class
             ).getBody();
+            if (response == null) {
+                throw new ExternalServiceException("Mercado Pago", "Consulta de order retornou corpo vazio", null);
+            }
+            return response;
         } catch (RestClientException e) {
             throw new ExternalServiceException("Mercado Pago",
                     "Falha ao consultar order", e);

@@ -39,4 +39,9 @@ public class CondominioController {
                                                         @RequestBody @Valid CondominioRequest request) {
         return ResponseEntity.ok(service.atualizar(condominioId, request));
     }
+
+    @DeleteMapping("/{condominioId}")
+    public ResponseEntity<CondominioResponse> desativar(@PathVariable String condominioId) {
+        return ResponseEntity.ok(service.desativar(condominioId));
+    }
 }

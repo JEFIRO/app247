@@ -7,9 +7,15 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import java.util.NoSuchElementException;
+import com.jefiro.app247.domain.model.dto.PriceChangedResponse;
 
 @ControllerAdvice
 public class RestExceptionHandler extends ResponseEntityExceptionHandler {
+    @ExceptionHandler(PriceChangedException.class)
+    public ResponseEntity<PriceChangedResponse> priceChanged(PriceChangedException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(PriceChangedResponse.from(exception));
+    }
+
     @ExceptionHandler(UserNotFoundException.class)
     public ResponseEntity<RestErrorMessage> userNotFound(UserNotFoundException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new RestErrorMessage(HttpStatus.NOT_FOUND, exception.getMessage()));

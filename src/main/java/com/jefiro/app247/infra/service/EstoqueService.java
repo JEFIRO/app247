@@ -5,16 +5,20 @@ import com.jefiro.app247.domain.model.dto.estoque.EstoqueResponse;
 import com.jefiro.app247.domain.model.dto.estoque.MovimentacaoEstoqueResponse;
 import com.jefiro.app247.domain.model.dto.ProdutoTerminalResponse;
 import com.jefiro.app247.domain.model.enum_type.TipoMovimentacaoEstoque;
+import com.jefiro.app247.domain.model.enum_type.ProdutoCatalogChangeReason;
+import com.jefiro.app247.infra.event.ProdutoCatalogChangedEvent;
 import com.jefiro.app247.infra.repository.EstoqueCondominioRepository;
 import com.jefiro.app247.infra.repository.MovimentacaoEstoqueRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class EstoqueService {
@@ -24,6 +28,8 @@ public class EstoqueService {
     @Autowired private CondominioService condominioService;
     @Autowired private ProdutoService produtoService;
     @Autowired private TerminalService terminalService;
+    @Autowired private ApplicationEventPublisher eventPublisher;
+    @Autowired private PricingService pricingService;
 
     public List<ProdutoTerminalResponse> listarProdutosDoTerminal(String terminalId) {
         var terminal = terminalService.getTerminal(terminalId);
@@ -33,26 +39,60 @@ public class EstoqueService {
                 .stream()
                 .filter(estoque -> Boolean.TRUE.equals(estoque.getAtivo()))
                 .filter(estoque -> estoque.getProduto().isStatus())
-                .map(ProdutoTerminalResponse::new)
+                .map(estoque -> new ProdutoTerminalResponse(estoque, pricingService.calcular(
+                        estoque.getProduto(), terminal.getCondominio(),
+                        java.time.LocalDateTime.now(java.time.ZoneOffset.UTC))))
                 .toList();
     }
 
     @Transactional
     public EstoqueResponse disponibilizar(String condominioId, String produtoId, BigDecimal quantidade) {
+        return disponibilizar(condominioId, produtoId, quantidade, true);
+    }
+
+    @Transactional
+    public EstoqueResponse disponibilizar(String condominioId, String produtoId, BigDecimal quantidade,
+                                           Boolean ativoSolicitado) {
         String empresaId = EmpresaContext.require();
+        boolean ativo = ativoSolicitado == null || ativoSolicitado;
         Condominio condominio = condominioService.buscarDoTenant(condominioId, empresaId);
         Produto produto = produtoService.buscarPorIdDoTenant(produtoId, empresaId);
-        if (estoqueRepository.findByCondominioIdCondominioAndProdutoIdProduto(condominioId, produtoId).isPresent()) {
+        var existente = estoqueRepository.findByCondominioIdCondominioAndProdutoIdProduto(condominioId, produtoId);
+        if (existente.isPresent() && Boolean.TRUE.equals(existente.get().getAtivo())) {
             throw new IllegalStateException("Produto já está disponível no condomínio");
+        }
+        if (existente.isPresent()) {
+            EstoqueCondominio estoque = existente.get();
+            estoque.alterarDisponibilidade(ativo);
+            estoqueRepository.saveAndFlush(estoque);
+            movimentar(estoque, quantidade, TipoMovimentacaoEstoque.ENTRADA,
+                    null, null, "Reativação no condomínio", null);
+            if (ativo) {
+                publicarCatalogo(estoque, ProdutoCatalogChangeReason.PRODUCT_AVAILABILITY_CHANGED);
+            }
+            return new EstoqueResponse(estoque);
         }
         EstoqueCondominio estoque = new EstoqueCondominio();
         estoque.setCondominio(condominio);
         estoque.setProduto(produto);
         estoque.setQuantidade(BigDecimal.ZERO);
-        estoque.setAtivo(true);
+        estoque.alterarDisponibilidade(ativo);
         estoque = estoqueRepository.saveAndFlush(estoque);
         movimentar(estoque, quantidade, TipoMovimentacaoEstoque.ENTRADA,
                 null, null, "Estoque inicial", null);
+        if (ativo) {
+            publicarCatalogo(estoque, ProdutoCatalogChangeReason.PRODUCT_ASSIGNED_TO_CONDOMINIUM);
+        }
+        return new EstoqueResponse(estoque);
+    }
+
+    @Transactional
+    public EstoqueResponse remover(String condominioId, String produtoId) {
+        EstoqueCondominio estoque = estoqueDoTenantParaAtualizacao(condominioId, produtoId);
+        if (!Boolean.TRUE.equals(estoque.getAtivo())) return new EstoqueResponse(estoque);
+        estoque.alterarDisponibilidade(false);
+        estoqueRepository.saveAndFlush(estoque);
+        publicarCatalogo(estoque, ProdutoCatalogChangeReason.PRODUCT_REMOVED_FROM_CONDOMINIUM);
         return new EstoqueResponse(estoque);
     }
 
@@ -173,5 +213,11 @@ public class EstoqueService {
 
     private String chave(Order order, Item item, String fase) {
         return order.getIdOrder() + ":" + item.getIdItem() + ":" + fase;
+    }
+
+    private void publicarCatalogo(EstoqueCondominio estoque, ProdutoCatalogChangeReason motivo) {
+        eventPublisher.publishEvent(new ProdutoCatalogChangedEvent(
+                estoque.getProduto().getIdProduto(), motivo,
+                Set.of(estoque.getCondominio().getIdCondominio())));
     }
 }

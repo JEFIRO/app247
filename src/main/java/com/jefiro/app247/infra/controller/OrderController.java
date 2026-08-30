@@ -1,8 +1,9 @@
 package com.jefiro.app247.infra.controller;
 
 import com.jefiro.app247.domain.model.dto.OrderDetailResponse;
-import com.jefiro.app247.domain.model.dto.PointPaymentResponse;
+import com.jefiro.app247.domain.model.dto.PaymentStatusResponse;
 import com.jefiro.app247.infra.service.OrderService;
+import com.jefiro.app247.infra.service.PaymentReconciliationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +19,8 @@ public class OrderController {
 
     @Autowired
     OrderService service;
+    @Autowired
+    PaymentReconciliationService reconciliationService;
 
     @GetMapping("/finalizar")
     public ResponseEntity<?> order(@RequestParam String carrinho_id) {
@@ -30,12 +33,11 @@ public class OrderController {
     }
 
     @GetMapping("/{orderId}/status")
-    public ResponseEntity<PointPaymentResponse> getStatus(
+    public ResponseEntity<PaymentStatusResponse> getStatus(
             @PathVariable String orderId,
             @RequestParam String terminalId
     ) {
-        return ResponseEntity.ok(PointPaymentResponse.from(
-                service.getOrderForTerminal(orderId, terminalId)));
+        return ResponseEntity.ok(reconciliationService.reconcileForTerminal(orderId, terminalId));
     }
 
 

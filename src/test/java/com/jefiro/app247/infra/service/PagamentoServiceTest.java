@@ -37,6 +37,7 @@ class PagamentoServiceTest {
     @Mock PagamentoRepository pagamentoRepository;
     @Mock ApplicationEventPublisher eventPublisher;
     @Mock MercadoPagoOrderQueryService mercadoPagoOrderQueryService;
+    @Mock PaymentReconciliationService reconciliationService;
     @InjectMocks PagamentoService pagamentoService;
 
     private Order order;
@@ -44,6 +45,12 @@ class PagamentoServiceTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        PaymentStateTransitionService transitionService = new PaymentStateTransitionService();
+        transitionService.orderService = orderService;
+        transitionService.carrinhoService = carrinhoService;
+        transitionService.pagamentoRepository = pagamentoRepository;
+        transitionService.eventPublisher = eventPublisher;
+        pagamentoService.transitionService = transitionService;
         order = new Order();
         order.setIdOrder(ORDER_ID);
         order.setStatus(OrderStatus.PENDING);
@@ -221,6 +228,20 @@ class PagamentoServiceTest {
     }
 
     @Test
+    void aprovacaoReconciliadaDuasVezesPublicaEfeitoDeNegocioUmaVez() throws Exception {
+        when(orderService.getOrderForUpdate(ORDER_ID)).thenReturn(order);
+        when(pagamentoRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+        when(orderService.save(any())).thenAnswer(call -> call.getArgument(0));
+        String approved = webhook("processed", "accredited", "credit_card", "visa", 1, true);
+
+        pagamentoService.atualizarPagamento(approved);
+        pagamentoService.atualizarPagamento(approved);
+
+        verify(eventPublisher, times(1)).publishEvent(any(com.jefiro.app247.infra.event.OrderPaidEvent.class));
+        verify(eventPublisher, times(1)).publishEvent(any(PaymentEvent.class));
+    }
+
+    @Test
     void cliqueDuplicadoRetornaMesmaCobrancaSemCriarOutraNoService() {
         Carrinho carrinho = new Carrinho();
         carrinho.setIdCarrinho("cart-1");
@@ -244,6 +265,37 @@ class PagamentoServiceTest {
         assertThat(second.status()).isEqualTo(
                 com.jefiro.app247.domain.model.enum_type.TerminalPaymentStatus.WAITING_PAYMENT);
         verify(orderService, times(2)).criarCobranca(carrinho);
+    }
+
+    @Test
+    void tentativaComRemotoAprovadoReconciliaENaoCriaSegundaCobranca() {
+        Carrinho carrinho = new Carrinho();
+        carrinho.setIdCarrinho("cart-1");
+        Terminal terminal = new Terminal();
+        terminal.setIdTerminal("terminal-1");
+        terminal.setCondominio(new Condominio());
+        carrinho.setTerminal(terminal);
+        Order existing = new Order();
+        existing.setIdOrder(ORDER_ID);
+        existing.setStatus(OrderStatus.CREATED);
+        existing.setCarrinho(carrinho);
+        existing.setMpOrderId("mp-order-1");
+        existing.setPagamento(new Pagamento(existing));
+        when(orderService.findByCarrinho("cart-1")).thenReturn(java.util.Optional.of(existing));
+        doAnswer(call -> {
+            existing.setStatus(OrderStatus.PROCESSED);
+            existing.getPagamento().setStatus(PagamentoStatus.PROCESSED);
+            return true;
+        }).when(reconciliationService).reconcileOrder(ORDER_ID);
+        when(carrinhoService.getByIdForUpdate("cart-1")).thenReturn(carrinho);
+        when(orderService.criarCobranca(carrinho)).thenReturn(existing);
+
+        PointPaymentResponse response = pagamentoService.gerarCobranca("cart-1");
+
+        assertThat(response.status()).isEqualTo(
+                com.jefiro.app247.domain.model.enum_type.TerminalPaymentStatus.APPROVED);
+        verify(reconciliationService).reconcileOrder(ORDER_ID);
+        verify(orderService).criarCobranca(carrinho);
     }
 
     @Test

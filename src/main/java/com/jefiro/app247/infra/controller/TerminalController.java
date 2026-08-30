@@ -39,6 +39,11 @@ public class TerminalController {
         return ResponseEntity.ok(service.listar(condominioId));
     }
 
+    @GetMapping("/terminais")
+    public ResponseEntity<List<TerminalResponseDTO>> listarTodos() {
+        return ResponseEntity.ok(service.listarTodos());
+    }
+
     @GetMapping("/terminais/{terminalId}")
     public ResponseEntity<TerminalResponseDTO> buscar(@PathVariable String terminalId) {
         return ResponseEntity.ok(service.buscar(terminalId));

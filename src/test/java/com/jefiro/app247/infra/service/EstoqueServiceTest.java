@@ -5,6 +5,10 @@ import com.jefiro.app247.domain.model.enum_type.TipoMovimentacaoEstoque;
 import com.jefiro.app247.domain.model.terminal.Terminal;
 import com.jefiro.app247.infra.repository.EstoqueCondominioRepository;
 import com.jefiro.app247.infra.repository.MovimentacaoEstoqueRepository;
+import com.jefiro.app247.infra.event.ProdutoCatalogChangedEvent;
+import com.jefiro.app247.domain.model.enum_type.ProdutoCatalogChangeReason;
+import org.springframework.context.ApplicationEventPublisher;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -15,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -25,7 +30,14 @@ class EstoqueServiceTest {
     @Mock MovimentacaoEstoqueRepository movimentacaoRepository;
     @Mock CondominioService condominioService;
     @Mock ProdutoService produtoService;
+    @Mock TerminalService terminalService;
+    @Mock ApplicationEventPublisher eventPublisher;
     @InjectMocks EstoqueService service;
+
+    @AfterEach
+    void limparTenant() {
+        EmpresaContext.clear();
+    }
 
     @Test
     void reservaPermiteSaldoNegativoERegistraMovimento() {
@@ -39,6 +51,7 @@ class EstoqueServiceTest {
         verify(movimentacaoRepository).save(captor.capture());
         assertEquals(TipoMovimentacaoEstoque.RESERVA, captor.getValue().getTipo());
         assertEquals("order-a:item-a:RESERVA", captor.getValue().getChaveIdempotencia());
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -82,7 +95,53 @@ class EstoqueServiceTest {
         var resultado = service.listarGeral();
 
         assertEquals(new BigDecimal("22.000"), resultado.get(0).quantidade());
-        EmpresaContext.clear();
+    }
+
+    @Test
+    void associacaoCriadaNotificaSomenteCondominioDaAssociacao() {
+        EmpresaContext.set("empresa-a");
+        Empresa empresa = Empresa.builder().id("empresa-a").build();
+        Condominio condominio = new Condominio();
+        condominio.setIdCondominio("cond-a");
+        condominio.setEmpresa(empresa);
+        Produto produto = new Produto();
+        produto.setIdProduto("prod-a");
+        produto.setEmpresa(empresa);
+        when(condominioService.buscarDoTenant("cond-a", "empresa-a")).thenReturn(condominio);
+        when(produtoService.buscarPorIdDoTenant("prod-a", "empresa-a")).thenReturn(produto);
+        when(estoqueRepository.findByCondominioIdCondominioAndProdutoIdProduto("cond-a", "prod-a"))
+                .thenReturn(Optional.empty());
+        when(estoqueRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.disponibilizar("cond-a", "prod-a", BigDecimal.ZERO);
+
+        ArgumentCaptor<ProdutoCatalogChangedEvent> captor =
+                ArgumentCaptor.forClass(ProdutoCatalogChangedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertEquals(ProdutoCatalogChangeReason.PRODUCT_ASSIGNED_TO_CONDOMINIUM, captor.getValue().reason());
+        assertEquals(Set.of("cond-a"), captor.getValue().condominiumIds());
+    }
+
+    @Test
+    void remocaoFazSoftDeleteENotificaCondominio() {
+        EmpresaContext.set("empresa-a");
+        Fixture f = fixture("-1.000");
+        f.estoque.setAtivo(true);
+        when(condominioService.buscarDoTenant("cond-a", "empresa-a"))
+                .thenReturn(f.estoque.getCondominio());
+        when(produtoService.buscarPorIdDoTenant("prod-a", "empresa-a"))
+                .thenReturn(f.estoque.getProduto());
+        when(estoqueRepository.findForUpdate("cond-a", "prod-a")).thenReturn(Optional.of(f.estoque));
+
+        service.remover("cond-a", "prod-a");
+
+        assertFalse(f.estoque.getAtivo());
+        assertEquals(new BigDecimal("-1.000"), f.estoque.getQuantidade());
+        ArgumentCaptor<ProdutoCatalogChangedEvent> captor =
+                ArgumentCaptor.forClass(ProdutoCatalogChangedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertEquals(ProdutoCatalogChangeReason.PRODUCT_REMOVED_FROM_CONDOMINIUM, captor.getValue().reason());
+        assertEquals(Set.of("cond-a"), captor.getValue().condominiumIds());
     }
 
     private Fixture fixture(String quantidade) {

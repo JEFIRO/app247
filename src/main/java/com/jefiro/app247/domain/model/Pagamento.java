@@ -31,6 +31,7 @@ public class Pagamento {
     private Empresa empresa;
     @OneToOne(mappedBy = "pagamento")
     private Order order;
+    @Column(nullable = false, precision = 15, scale = 6)
     private BigDecimal valor;
 
     @Enumerated(EnumType.STRING)
@@ -72,7 +73,7 @@ public class Pagamento {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
         this.order = order;
-        this.valor = order.getTotal();
+        this.valor = valorCobrado(order);
         this.tipo = tipo;
         this.status = PagamentoStatus.PENDING;
         this.transactionId = payment.getId().toString();
@@ -82,7 +83,7 @@ public class Pagamento {
         this.sourcePaiment = PagamentoSource.TERMINAL;
         this.empresa = order.getEmpresa();
         this.order = order;
-        this.valor = order.getTotal();
+        this.valor = valorCobrado(order);
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
         this.status = PagamentoStatus.PENDING;
@@ -96,9 +97,13 @@ public class Pagamento {
         this.sourcePaiment = PagamentoSource.TERMINAL;
         this.empresa = order.getEmpresa();
         this.order = order;
-        this.valor = order.getTotal();
+        this.valor = valorCobrado(order);
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
         this.status = PagamentoStatus.PENDING;
+    }
+
+    private BigDecimal valorCobrado(Order order) {
+        return order.getTotalCobrado() != null ? order.getTotalCobrado() : order.getTotal();
     }
 }

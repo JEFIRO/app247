@@ -44,6 +44,7 @@ public class Carrinho {
 
     @Enumerated(EnumType.STRING)
     private CarrinhoStatus status;
+    @Column(precision = 15, scale = 6)
     private BigDecimal subtotal;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

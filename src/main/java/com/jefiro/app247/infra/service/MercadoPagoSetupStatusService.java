@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 @Service
 public class MercadoPagoSetupStatusService {
@@ -23,7 +24,8 @@ public class MercadoPagoSetupStatusService {
     @Transactional(readOnly = true)
     public MercadoPagoSetupStatusResponse consultar() {
         String empresaId = EmpresaContext.require();
-        boolean contaVinculada = contaRepository.findByEmpresaId(empresaId)
+        Optional<MercadoPagoConta> conta = contaRepository.findByEmpresaId(empresaId);
+        boolean contaVinculada = conta
                 .map(this::isAutorizacaoValida)
                 .orElse(false);
         long quantidadeTerminais = terminalRepository.countByCondominioEmpresaId(empresaId);
@@ -40,7 +42,8 @@ public class MercadoPagoSetupStatusService {
                 maquininhaVinculada,
                 contaVinculada && maquininhaVinculada,
                 quantidadeTerminais,
-                quantidadeMaquininhas
+                quantidadeMaquininhas,
+                conta.map(MercadoPagoConta::getDataCriacao).orElse(null)
         );
     }
 

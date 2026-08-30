@@ -32,7 +32,7 @@
 
     redis:
       image: redis:8
-      container_name: redisss
+      container_name: redis
       restart: unless-stopped
       ports:
         - "6379:6379"

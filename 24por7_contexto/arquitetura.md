@@ -30,7 +30,7 @@ Não há separação por interfaces de casos de uso ou adaptadores: controllers 
 |---|---|---|
 | Onboarding | `OnboardingController`, `OnboardingService` | Cria empresa, gestor `ADMIN`, primeiro condomínio e primeiro terminal em uma transação. |
 | Gestão da empresa | `EmpresaService`, `CondominioService`, `TerminalService` | Opera recursos do tenant usando `EmpresaContext` e consultas compostas por empresa. |
-| Catálogo | `ProdutoController`, `ProdutoService` | CRUD parcial, paginação, sincronização por `updateAt`, destaques e upload JPG/JPEG. |
+| Catálogo | `ProdutoController`, `ProdutoService`, `ProdutoSyncService` | CRUD parcial, paginação, sync por Terminal usando timestamps de produto/disponibilidade, invalidação WebSocket após commit, destaques e upload JPG/JPEG. |
 | Compra | `CarrinhoService`, `OrderService` | Materializa itens a partir de produtos, calcula subtotal e cria pedido. |
 | Checkout temporário | `CheckoutSessionService`, repository Redis | Sessão de 15 minutos, consulta de carrinho, vínculo de usuário e QR Code. |
 | Pagamento Point | `PagamentoService`, `MercadoPagoCobrancaService` | Cria order local, dispara evento interno e chama `/v1/orders` do Mercado Pago. |

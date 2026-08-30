@@ -21,7 +21,7 @@ Todos os IDs de entidade são strings geradas com UUID, salvo as incompatibilida
 | `Terminal` / `terminal` | Pertence obrigatoriamente apenas a condomínio; pode guardar `mercadoPagoTerminalId`, único quando preenchido. |
 | `GrupoTributario` / `grupo_tributario` | Pertence a empresa; contém NCM, CEST, CFOP, CST/CSOSN e alíquotas. |
 | `Produto` / `produto` | Pertence a empresa e opcionalmente a grupo tributário; representa catálogo, preço e peso, sem saldo. |
-| `EstoqueCondominio` / `estoque_condominio` | Liga condomínio e produto, com saldo decimal, ativo e unicidade do par. |
+| `EstoqueCondominio` / `estoque_condominio` | Liga condomínio e produto, com saldo decimal, ativo, timestamps de catálogo e unicidade do par. |
 | `MovimentacaoEstoque` / `movimentacao_estoque` | Auditoria de entrada/ajuste/reserva/venda/liberação, com chave única de idempotência. |
 | `Carrinho` / `carrinho` | Pertence a empresa e a terminal; status, subtotal e itens com cascade/orphan removal. |
 | `Item` / `item` | Pertence a empresa, carrinho e produto; guarda snapshot comercial, quantidade e pesos. |
@@ -47,7 +47,7 @@ Enums JPA são gravados como texto. Entre os principais:
 - CRUD JPA simples: carrinho, empresa, endereço, pagamento e webhook event.
 - `CondominioRepository`: ID `String`, lista por empresa e busca por condomínio + empresa.
 - `TerminalRepository`: ID `String`, lista por condomínio + empresa e busca por terminal + `condominio.empresa`.
-- `ProdutoRepository`: possui versões tenant-aware por empresa e métodos globais legados ainda declarados.
+- `ProdutoRepository`: possui consultas tenant-aware por empresa; o sync físico fica nas queries de associação de `EstoqueCondominioRepository`.
 - `UserRepository`: busca por e-mail/CPF, existência por CPF e projeção paginada de orders.
 - `OrderRepository`: projeção paginada de orders por usuário.
 - `OauthMercadoPagoRepository`: busca conta por `mpUserId` ou `empresa.id`; `empresa_id` é único.
@@ -187,10 +187,11 @@ Redis não substitui o banco relacional. Ele armazena:
 
 O `RedisTemplate<String,Object>` usa chaves string e serialização JSON para valores e hashes. Alguns pontos injetam esse bean com tipo genérico `<String,String>`; em runtime é o mesmo bean configurado.
 
-## Migrations V21 a V23
+## Migrations V21 a V24
 
 - **V21** adiciona `orders.mp_event_version`, `orders.mp_event_date` e índice para `mp_order_id`;
 - **V22** adiciona `item.unidade_medida`, completando o snapshot comercial;
 - **V23** alinha `origin_request`, `transaction_id`, `installments`, comprimentos de IDs e colunas de catálogo/tributação com os mappings JPA.
+- **V24** adiciona `created_at/updated_at` a `estoque_condominio`, eleva timestamps do produto para precisão de microssegundos e cria índices para sync incremental.
 
 O profile `prod` usa `spring.jpa.hibernate.ddl-auto=validate`; o Hibernate não deve mais corrigir silenciosamente o schema produtivo. Isso exige aplicar e validar as migrations previamente. A aplicação dessas versões em MySQL não foi executada nesta tarefa porque não há banco de homologação fornecido.

@@ -9,7 +9,11 @@ import java.math.BigDecimal;
 public record ItemRequest(
         @NotBlank String productId,
         @NotNull @Positive Integer quantity,
-        BigDecimal receivedWeight
+        BigDecimal receivedWeight,
+        BigDecimal expectedUnitPrice
 
 ) {
+    public ItemRequest(String productId, Integer quantity, BigDecimal receivedWeight) {
+        this(productId, quantity, receivedWeight, null);
+    }
 }

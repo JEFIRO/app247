@@ -503,3 +503,29 @@ Bean Validation exige terminal, itens, produto e quantidade positiva. O service 
 ### Testes
 
 `CarrinhoServiceTest.rejeitaCarrinhoVazioAntesDePersistir` e `rejeitaSubtotalDivergenteAntesDoPagamento`.
+
+## BUG-026 — Sync antigo não representava o catálogo do condomínio nem remoções
+
+### Classificação
+
+`BUG CONFIRMADO` — severidade `ALTO` — status `RESOLVIDO` em 24 de agosto de 2026.
+
+### Local
+
+`ProdutoController.sync`, `ProdutoService.sync`, `ProdutoRepository`, `EstoqueCondominio` e cliente `TerminalPython/service/SyncService.py`.
+
+### Problema
+
+O endpoint exigia `lastSync` em `LocalDateTime`, dependia de `EmpresaContext`, consultava somente `Produto.updateAt` e devolvia produtos de toda a empresa. Além disso, `Produto.updateAt` não era atualizado por lifecycle e uma associação removida simplesmente desapareceria da lista, mantendo o produto antigo ativo no SQLite. O controller ainda usava `System.out.println`.
+
+**Validação complementar em 24 de agosto de 2026:** a query atual de FULL foi confirmada por dados reais e a incremental por teste JPA cobrindo associação criada após o cursor com `Produto.updateAt` anterior. Não foi necessária alteração da JPQL. Foi ampliado o log `[PRODUCT-SYNC]` com hierarquia, janela e contagens para diferenciar condomínio vazio de falha. O bug residual estava no Terminal, que usava cursor sem marcador de cache, e foi corrigido no cliente.
+
+### Solução
+
+O endpoint agora identifica o Terminal, deriva seu condomínio, gera `syncAt` UTC e suporta full/incremental. A query combina `Produto.updateAt` e `EstoqueCondominio.updatedAt`; remoção é soft delete e retorna tombstone `REMOVE`. `Produto` passou a manter `updateAt` em toda atualização e a migration V24 adicionou os timestamps da associação. Logs usam `[PRODUCT-SYNC]`.
+
+Notificações direcionadas usam `ProdutoCatalogChangedEvent` e listener `AFTER_COMMIT`; produto sem condomínio não seleciona Terminal e rollback não entrega evento. Quantidade não atualiza o cursor nem dispara catálogo.
+
+### Testes
+
+`ProdutoServiceTest`, `EstoqueServiceTest`, `ProdutoSyncServiceTest` e `ProdutoCatalogNotificationAfterCommitTest` cobrem múltiplos condomínios, ausência de associação, associação/remoção, UPSERT/REMOVE, isolamento da lista de Terminais, commit e rollback.

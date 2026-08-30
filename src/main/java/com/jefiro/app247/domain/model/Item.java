@@ -1,7 +1,10 @@
 package com.jefiro.app247.domain.model;
 
 import com.jefiro.app247.domain.model.enum_type.ItemStatus;
+import com.jefiro.app247.domain.model.enum_type.TipoPromocao;
 import com.jefiro.app247.domain.model.enum_type.UnidadeMedida;
+import com.jefiro.app247.domain.model.dto.PrecoCalculado;
+import com.jefiro.app247.infra.service.MoneyPolicy;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -39,7 +42,28 @@ public class Item {
     private String name;
     private String foto;
 
+    @Column(nullable = false, precision = 15, scale = 6)
     private BigDecimal unitPrice;
+
+    @Column(name = "original_price", nullable = false, precision = 15, scale = 6)
+    private BigDecimal originalPrice;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "promocao_id")
+    private Promocao promocao;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "promotion_type", length = 30)
+    private TipoPromocao promotionType;
+
+    @Column(name = "promotion_value", precision = 15, scale = 6)
+    private BigDecimal promotionValue;
+
+    @Column(name = "calculated_discount", nullable = false, precision = 15, scale = 6)
+    private BigDecimal calculatedDiscount;
+
+    @Column(name = "calculated_subtotal", nullable = false, precision = 15, scale = 6)
+    private BigDecimal calculatedSubtotal;
 
     @Enumerated(EnumType.STRING)
     private UnidadeMedida unidadeMedida;
@@ -60,7 +84,11 @@ public class Item {
         this.produto = produto;
         this.barcode = produto.getCodigo();
         this.name = produto.getNome();
-        this.unitPrice = produto.getPreco();
+        this.unitPrice = MoneyPolicy.persistence(produto.getPreco());
+        this.originalPrice = this.unitPrice;
+        this.calculatedDiscount = MoneyPolicy.persistence(BigDecimal.ZERO);
+        this.calculatedSubtotal = MoneyPolicy.persistence(
+                this.unitPrice.multiply(BigDecimal.valueOf(quantity)));
         this.unidadeMedida = produto.getUnidadeMedida();
         this.expectedWeight = produto.getPeso();
         this.foto = produto.getFoto();
@@ -69,6 +97,19 @@ public class Item {
         this.status = ItemStatus.VALIDATED;
         this.requiresWeight = true;
 
+    }
+
+    public Item(PrecoCalculado preco, Integer quantity, BigDecimal receivedWeight) {
+        this(preco.produto(), quantity, receivedWeight);
+        this.originalPrice = preco.precoOriginal();
+        this.unitPrice = preco.precoCalculado();
+        this.calculatedDiscount = preco.descontoCalculado();
+        this.calculatedSubtotal = MoneyPolicy.persistence(preco.subtotal(quantity));
+        this.promocao = preco.promocao();
+        if (preco.promocao() != null) {
+            this.promotionType = preco.promocao().getTipo();
+            this.promotionValue = preco.promocao().getValor();
+        }
     }
 
     public String getIdProduto() {

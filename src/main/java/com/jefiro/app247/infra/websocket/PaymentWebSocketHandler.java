@@ -4,7 +4,6 @@ package com.jefiro.app247.infra.websocket;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jefiro.app247.infra.event.PaymentEvent;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.event.EventListener;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.stereotype.Component;
@@ -47,22 +46,27 @@ public class PaymentWebSocketHandler extends TextWebSocketHandler {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void sendToTerminal(PaymentEvent event) {
-
-        WebSocketSession session = sessions.get(event.getTerminalId());
-
-        if (session != null && session.isOpen()) {
-            try {
-                String json = objectMapper.writeValueAsString(event);
-                session.sendMessage(new TextMessage(json));
-                log.info("Resultado de pagamento enviado ao terminal: terminalId={}, orderId={}, status={}",
-                        event.getTerminalId(), event.getOrderId(), event.getStatus());
-            } catch (IOException e) {
-                log.warn("Falha ao enviar resultado ao terminal: terminalId={}, orderId={}",
-                        event.getTerminalId(), event.getOrderId(), e);
-            }
+        if (sendToTerminal(event.getTerminalId(), event)) {
+            log.info("Resultado de pagamento enviado ao terminal: terminalId={}, orderId={}, status={}",
+                    event.getTerminalId(), event.getOrderId(), event.getStatus());
         } else {
             log.info("Terminal sem WebSocket ativo; status permanece consultável: terminalId={}, orderId={}, status={}",
                     event.getTerminalId(), event.getOrderId(), event.getStatus());
+        }
+    }
+
+    public boolean sendToTerminal(String terminalId, Object payload) {
+        WebSocketSession session = sessions.get(terminalId);
+        if (session == null || !session.isOpen()) return false;
+        try {
+            String json = objectMapper.writeValueAsString(payload);
+            synchronized (session) {
+                session.sendMessage(new TextMessage(json));
+            }
+            return true;
+        } catch (IOException e) {
+            log.warn("Falha ao enviar mensagem ao terminal: terminalId={}", terminalId, e);
+            return false;
         }
     }
 }

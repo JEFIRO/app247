@@ -1,5 +1,7 @@
 # WebSocket
 
+> Atualização em 24 de agosto de 2026: o heartbeat nativo responde `HEARTBEAT_ACK {terminalId,status,lastPing}` somente após `saveAndFlush`. O cliente pode usar o ACK como confirmação de persistência e reconectar quando ele não chegar.
+
 Voltar para [[00-index]]. Fluxo de pagamento em [[mercado-pago]] e arquitetura geral em [[arquitetura]].
 
 O projeto habilita simultaneamente WebSocket nativo e STOMP. Ambos aceitam qualquer origem e não implementam autenticação específica no handshake ou nas mensagens.
@@ -21,13 +23,13 @@ O `terminalId` é `String` no DTO; o handler não invoca Bean Validation explici
 
 Um job executado a cada 60 segundos percorre todos os terminais e marca como `OFFLINE` os cujo `lastPing` não nulo seja anterior a 60 segundos.
 
-## WebSocket nativo de pagamento
+## WebSocket nativo direcionado ao Terminal
 
 Endpoint registrado: `/payment-socket/*`. O cliente deve conectar usando o identificador do terminal como último segmento, por exemplo `/payment-socket/{terminalId}`.
 
 Ao conectar, `PaymentWebSocketHandler` extrai esse segmento e mantém uma única `WebSocketSession` por `terminalId` em memória. Uma nova conexão para o mesmo ID substitui a anterior no mapa. Ao fechar, a sessão é removida.
 
-O handler escuta `PaymentEvent` e, quando há sessão aberta para o terminal, envia JSON com:
+O mesmo handler envia dois tipos de evento à sessão aberta do Terminal. Para pagamento, `PaymentEvent` contém:
 
 - `type: PAYMENT_STATUS`;
 - `terminalId`;
@@ -41,7 +43,21 @@ O handler escuta `PaymentEvent` e, quando há sessão aberta para o terminal, en
 
 O terminal é obtido exclusivamente por `Order -> Carrinho -> Terminal`; não há broadcast. Os listeners executam em `AFTER_COMMIT`. Falha de envio ou terminal offline é registrada, mas não reverte Pagamento, Order ou estoque.
 
-Não há replay ou clusterização das sessões. Para recuperação, o Terminal consulta `GET /order/{orderId}/status?terminalId={terminalId}`, que lê o estado persistido sem criar nova cobrança.
+Não há replay ou clusterização das sessões. Para recuperação, o Terminal consulta `GET /order/{orderId}/status?terminalId={terminalId}`; estados não definitivos acionam [[payment-reconciliation]] antes da resposta, sem criar nova cobrança.
+
+Para catálogo, `ProdutoCatalogNotificationService` consome `ProdutoCatalogChangedEvent` em `AFTER_COMMIT`, resolve os IDs por `Condominio -> Terminal` e envia:
+
+```json
+{
+  "type": "PRODUCT_SYNC_REQUIRED",
+  "reason": "PRODUCT_UPDATED",
+  "productId": "uuid-do-produto"
+}
+```
+
+A mensagem é apenas invalidação. O dado e os tombstones vêm de `GET /produtos/sync?uuidTerminal=...&lastSync=...`. Produto sem associação ativa não seleciona condomínio; associação local seleciona apenas aquele condomínio; atualização global seleciona todos os condomínios com associação ativa. Falha de envio/offline não cria fila: o sync incremental recupera a mudança persistida.
+
+Motivos atuais: `PRODUCT_CREATED`, `PRODUCT_UPDATED`, `PRODUCT_ACTIVATED`, `PRODUCT_DEACTIVATED`, `PRODUCT_ASSIGNED_TO_CONDOMINIUM`, `PRODUCT_REMOVED_FROM_CONDOMINIUM` e `PRODUCT_AVAILABILITY_CHANGED`. `PRODUCT_CREATED` sem condomínio produz somente registro interno, sem envio.
 
 ## STOMP
 

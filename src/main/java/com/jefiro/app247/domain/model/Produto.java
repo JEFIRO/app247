@@ -12,6 +12,8 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import com.jefiro.app247.infra.service.MoneyPolicy;
 
 @Getter
 @Setter
@@ -35,6 +37,7 @@ public class Produto {
     @Column(nullable = false)
     private String codigo;
     private String nome;
+    @Column(nullable = false, precision = 15, scale = 6)
     private BigDecimal preco;
     @Enumerated(EnumType.STRING)
     private UnidadeMedida unidadeMedida;
@@ -49,18 +52,30 @@ public class Produto {
     private LocalDateTime updateAt;
     private boolean status;
 
+    @PrePersist
+    private void prePersist() {
+        LocalDateTime agora = LocalDateTime.now(ZoneOffset.UTC);
+        if (createAt == null) createAt = agora;
+        updateAt = agora;
+    }
+
+    @PreUpdate
+    private void preUpdate() {
+        updateAt = LocalDateTime.now(ZoneOffset.UTC);
+    }
+
     public Produto(CreateProductDTO produtoDTO) {
         this.codigo = produtoDTO.codigo();
         this.nome = produtoDTO.nome();
-        this.preco = produtoDTO.preco();
+        this.preco = MoneyPolicy.persistence(produtoDTO.preco());
         this.unidadeMedida = UnidadeMedida.valueOf(produtoDTO.unidadeMedida().toUpperCase());
         this.categoria = ProdutoCategoria.valueOf(produtoDTO.categoria().toUpperCase());
         this.descricao = produtoDTO.descricao();
         this.foto = produtoDTO.foto();
         this.peso = produtoDTO.peso();
         this.pesoTolerancia = produtoDTO.pesoTolerancia();
-        this.createAt = LocalDateTime.now();
-        this.updateAt = LocalDateTime.now();
+        this.createAt = LocalDateTime.now(ZoneOffset.UTC);
+        this.updateAt = this.createAt;
         this.status = true;
     }
 }

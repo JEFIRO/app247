@@ -44,6 +44,11 @@ public class TerminalService {
                 .stream().map(TerminalResponseDTO::new).toList();
     }
 
+    public List<TerminalResponseDTO> listarTodos() {
+        return repository.findAllByCondominioEmpresaIdOrderByNome(EmpresaContext.require())
+                .stream().map(TerminalResponseDTO::new).toList();
+    }
+
     public TerminalResponseDTO buscar(String terminalId) {
         return new TerminalResponseDTO(getTerminalDoTenant(terminalId));
     }
@@ -75,12 +80,13 @@ public class TerminalService {
                 .orElseThrow(TerminalNotFoundException::new);
     }
 
-    public void updateStatus(TerminalStatusDTO status) {
+    @Transactional
+    public Terminal updateStatus(TerminalStatusDTO status) {
         Terminal terminal = getTerminal(status.terminalId());
         terminal.setStatus(TerminalStatus.valueOf(status.status()));
         terminal.setUpdate_at(LocalDateTime.now());
         terminal.setLastPing(LocalDateTime.now());
-        repository.save(terminal);
+        return repository.saveAndFlush(terminal);
     }
 
     Terminal construir(TerminalRequest request, Condominio condominio) {

@@ -7,15 +7,19 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public record ProdutoTerminalResponse(
-        String id, String codigo, String nome, String descricao, BigDecimal preco,
+        String id, String codigo, String nome, String descricao, BigDecimal precoOriginal,
+        BigDecimal preco, boolean emPromocao, String promocaoId, String promocaoNome,
         UnidadeMedida unidadeMedida, ProdutoCategoria categoria, BigDecimal peso,
         BigDecimal pesoTolerancia, String foto, boolean ativo, BigDecimal quantidade,
         LocalDateTime createdAt, LocalDateTime updatedAt
 ) {
-    public ProdutoTerminalResponse(EstoqueCondominio estoque) {
+    public ProdutoTerminalResponse(EstoqueCondominio estoque, PrecoCalculado calculado) {
         this(estoque.getProduto().getIdProduto(), estoque.getProduto().getCodigo(),
                 estoque.getProduto().getNome(), estoque.getProduto().getDescricao(),
-                estoque.getProduto().getPreco(), estoque.getProduto().getUnidadeMedida(),
+                calculado.precoOriginal(), calculado.precoCalculado(), calculado.emPromocao(),
+                calculado.promocao() != null ? calculado.promocao().getIdPromocao() : null,
+                calculado.promocao() != null ? calculado.promocao().getNome() : null,
+                estoque.getProduto().getUnidadeMedida(),
                 estoque.getProduto().getCategoria(), estoque.getProduto().getPeso(),
                 estoque.getProduto().getPesoTolerancia(), estoque.getProduto().getFoto(),
                 Boolean.TRUE.equals(estoque.getAtivo()) && estoque.getProduto().isStatus(),

@@ -17,7 +17,8 @@ public class EstoqueController {
     }
     @PostMapping("/condominios/{condominioId}/estoque")
     public ResponseEntity<?> disponibilizar(@PathVariable String condominioId, @RequestBody @Valid EstoqueRequest request) {
-        return ResponseEntity.ok(service.disponibilizar(condominioId, request.produtoId(), request.quantidade()));
+        return ResponseEntity.ok(service.disponibilizar(
+                condominioId, request.produtoId(), request.quantidade(), request.ativo()));
     }
     @PostMapping("/condominios/{condominioId}/estoque/{produtoId}/entrada")
     public ResponseEntity<?> entrada(@PathVariable String condominioId, @PathVariable String produtoId,
@@ -28,6 +29,10 @@ public class EstoqueController {
     public ResponseEntity<?> ajustar(@PathVariable String condominioId, @PathVariable String produtoId,
                                      @RequestBody @Valid QuantidadeEstoqueRequest request) {
         return ResponseEntity.ok(service.ajustar(condominioId, produtoId, request.quantidade(), request.motivo()));
+    }
+    @DeleteMapping("/condominios/{condominioId}/estoque/{produtoId}")
+    public ResponseEntity<?> remover(@PathVariable String condominioId, @PathVariable String produtoId) {
+        return ResponseEntity.ok(service.remover(condominioId, produtoId));
     }
     @GetMapping("/estoque/geral")
     public ResponseEntity<?> geral() { return ResponseEntity.ok(service.listarGeral()); }

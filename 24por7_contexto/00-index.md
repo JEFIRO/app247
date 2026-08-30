@@ -17,6 +17,7 @@ Esta base descreve o backend conforme o código presente no repositório. O cód
 - [[estoque]] — catálogo, estoque por condomínio, movimentações, concorrência e ciclo da venda.
 - [[autenticacao]] — Spring Security, JWT, papéis, recuperação de senha e contexto de empresa.
 - [[websocket]] — endpoints WebSocket nativos, STOMP e eventos de pagamento.
+- [[sincronizacao-produtos]] — invalidação WebSocket e sync full/incremental do catálogo por Terminal.
 
 ## Decisões arquiteturais
 
@@ -26,6 +27,7 @@ Esta base descreve o backend conforme o código presente no repositório. O cód
 ## Integrações
 
 - [[mercado-pago]] — OAuth, Point Orders, webhook, filas Redis e fluxos de pagamento.
+- [[payment-reconciliation]] — recuperação após backend/webhook offline, endpoint, scheduler, startup e idempotência.
 
 ## Auditoria e evolução
 

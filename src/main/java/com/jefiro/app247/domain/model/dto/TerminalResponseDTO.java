@@ -15,12 +15,14 @@ public record TerminalResponseDTO(
         Boolean ativo,
         TerminalStatus status,
         String condominioId,
+        String versaoSoftware,
         String mercadoPagoTerminalId,
         LocalDateTime lastPing
 ) {
     public TerminalResponseDTO(Terminal terminal) {
         this(terminal.getIdTerminal(), terminal.getNome(), terminal.getCodigo(), terminal.getSerialNumber(),
                 terminal.getMacAddress(), terminal.getIpAddress(), terminal.getAtivo(), terminal.getStatus(),
-                terminal.getCondominio().getIdCondominio(), terminal.getMercadoPagoTerminalId(), terminal.getLastPing());
+                terminal.getCondominio().getIdCondominio(), terminal.getVersaoSoftware(),
+                terminal.getMercadoPagoTerminalId(), terminal.getLastPing());
     }
 }

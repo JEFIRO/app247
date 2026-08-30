@@ -6,6 +6,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 @Getter
 @Setter
@@ -32,4 +34,22 @@ public class EstoqueCondominio {
 
     @Column(nullable = false)
     private Boolean ativo = true;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    private void prePersist() {
+        LocalDateTime agora = LocalDateTime.now(ZoneOffset.UTC);
+        if (createdAt == null) createdAt = agora;
+        if (updatedAt == null) updatedAt = agora;
+    }
+
+    public void alterarDisponibilidade(boolean ativo) {
+        this.ativo = ativo;
+        this.updatedAt = LocalDateTime.now(ZoneOffset.UTC);
+    }
 }

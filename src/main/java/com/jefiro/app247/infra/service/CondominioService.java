@@ -56,6 +56,14 @@ public class CondominioService {
         return new CondominioResponse(repository.save(condominio));
     }
 
+    @Transactional
+    public CondominioResponse desativar(String condominioId) {
+        Condominio condominio = buscarDoTenant(condominioId, EmpresaContext.require());
+        condominio.setAtivo(false);
+        condominio.setUpdatedAt(LocalDateTime.now());
+        return new CondominioResponse(repository.save(condominio));
+    }
+
     public Condominio buscarDoTenant(String condominioId, String empresaId) {
         return repository.findByIdCondominioAndEmpresaId(condominioId, empresaId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Condomínio não encontrado"));

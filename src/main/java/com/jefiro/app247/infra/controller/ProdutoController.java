@@ -2,9 +2,12 @@ package com.jefiro.app247.infra.controller;
 
 import com.jefiro.app247.domain.model.Produto;
 import com.jefiro.app247.domain.model.dto.CreateProductDTO;
+import com.jefiro.app247.domain.model.dto.ProdutoDisponibilidadeRequest;
 import com.jefiro.app247.domain.model.dto.ProdutoResponse;
+import com.jefiro.app247.domain.model.dto.ProdutoSyncResponse;
 import com.jefiro.app247.domain.model.dto.response.PageResponse;
 import com.jefiro.app247.infra.service.ProdutoService;
+import com.jefiro.app247.infra.service.ProdutoSyncService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -15,9 +18,10 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/produtos")
@@ -25,6 +29,8 @@ public class ProdutoController {
 
     @Autowired
     private ProdutoService produtoService;
+    @Autowired
+    private ProdutoSyncService produtoSyncService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ProdutoResponse> salvar(
@@ -84,9 +90,19 @@ public class ProdutoController {
         return ResponseEntity.ok(new ProdutoResponse(produtoAtualizado));
     }
 
+    @PatchMapping("/{id}/disponibilidade")
+    public ResponseEntity<ProdutoResponse> alterarDisponibilidade(
+            @PathVariable String id,
+            @RequestBody @Valid ProdutoDisponibilidadeRequest request) {
+        return ResponseEntity.ok(new ProdutoResponse(
+                produtoService.alterarDisponibilidade(id, request.ativo())));
+    }
+
     @GetMapping("/sync")
-    public List<ProdutoResponse> sync(@RequestParam String lastSync) {
-        return produtoService.sync(lastSync).stream().map(ProdutoResponse::new).toList();
+    public ProdutoSyncResponse sync(
+            @RequestParam String uuidTerminal,
+            @RequestParam(required = false) Instant lastSync) {
+        return produtoSyncService.sincronizar(uuidTerminal, Optional.ofNullable(lastSync));
     }
 
     @GetMapping("/home")
