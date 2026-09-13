@@ -156,6 +156,7 @@ class EstoqueServiceTest {
         Produto produto = new Produto();
         produto.setIdProduto("prod-a");
         produto.setEmpresa(empresa);
+        produto.setCodigoInterno("SKU-A");
         CartItem item = new CartItem();
         item.setIdItem("item-a");
         item.setProduto(produto);

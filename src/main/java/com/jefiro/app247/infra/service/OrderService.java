@@ -1,8 +1,10 @@
 package com.jefiro.app247.infra.service;
 
 import com.jefiro.app247.domain.model.Carrinho;
+import com.jefiro.app247.domain.model.CartItem;
 import com.jefiro.app247.domain.model.Order;
 import com.jefiro.app247.domain.model.PaymentAttempt;
+import com.jefiro.app247.domain.model.Produto;
 import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.dto.OrderDTO;
 import com.jefiro.app247.domain.model.enum_type.CarrinhoStatus;
@@ -28,6 +30,9 @@ public class OrderService {
     CarrinhoService carrinhoService;
     @Autowired
     UserService userService;
+    @Autowired
+    ProdutoService produtoService;
+    @Autowired
     ApplicationEventPublisher eventPublisher;
 
     @Transactional
@@ -42,6 +47,8 @@ public class OrderService {
             throw new IllegalStateException("Carrinho já possui Order");
         }
 
+        carregarProdutosCompletosParaSnapshot(carrinho);
+        carrinhoService.validarParaPagamento(carrinho);
         carrinhoService.reprecificarParaCheckout(carrinho);
 
         carrinho.setStatus(CarrinhoStatus.READY_FOR_PAYMENT);
@@ -69,6 +76,7 @@ public class OrderService {
     public Order createOrderTest(String carrinhoId, String id_user) {
 
         Carrinho carrinho = carrinhoService.getById(carrinhoId);
+        carregarProdutosCompletosParaSnapshot(carrinho);
         Order order = new Order(carrinho);
 
         if (id_user != null) {
@@ -90,10 +98,15 @@ public class OrderService {
 
     @Transactional
     public Order criarCobranca(Carrinho carrinho) {
-        carrinhoService.validarParaPagamento(carrinho);
-        carrinhoService.reprecificarParaCheckout(carrinho);
-        Order order = repository.findByCarrinhoIdCarrinho(carrinho.getIdCarrinho())
-                .orElseGet(() -> createOrder(carrinho.getIdCarrinho(), null));
+        Optional<Order> orderExistente = repository.findByCarrinhoIdCarrinho(carrinho.getIdCarrinho());
+        Order order;
+        if (orderExistente.isPresent()) {
+            carrinhoService.validarParaPagamento(carrinho);
+            carrinhoService.reprecificarParaCheckout(carrinho);
+            order = orderExistente.get();
+        } else {
+            order = createOrder(carrinho.getIdCarrinho(), null);
+        }
         if (order.getCarrinho() != null) {
             order.atualizarTotaisDoCarrinho();
             repository.save(order);
@@ -143,5 +156,36 @@ public class OrderService {
 
     public Order save(Order order) {
         return repository.save(order);
+    }
+
+    private void carregarProdutosCompletosParaSnapshot(Carrinho carrinho) {
+        if (carrinho == null || carrinho.getEmpresa() == null
+                || carrinho.getEmpresa().getId() == null) {
+            throw new IllegalStateException("Carrinho sem empresa válida para criar a Order");
+        }
+        if (carrinho.getItems() == null || carrinho.getItems().isEmpty()) {
+            throw new IllegalStateException("Carrinho sem itens não pode gerar snapshot");
+        }
+
+        String empresaId = carrinho.getEmpresa().getId();
+        for (CartItem item : carrinho.getItems()) {
+            if (item == null || item.getProduto() == null
+                    || item.getProduto().getIdProduto() == null
+                    || item.getProduto().getIdProduto().isBlank()) {
+                throw new IllegalStateException("Carrinho possui item sem produto válido");
+            }
+
+            Produto produto = produtoService.buscarPorIdDoTenant(
+                    item.getProduto().getIdProduto(), empresaId);
+            if (produto.getEmpresa() == null || !empresaId.equals(produto.getEmpresa().getId())) {
+                throw new IllegalStateException(
+                        "Produto " + produto.getIdProduto() + " não pertence à empresa do carrinho");
+            }
+            if (produto.getCodigoInterno() == null || produto.getCodigoInterno().isBlank()) {
+                throw new IllegalStateException(
+                        "Produto " + produto.getIdProduto() + " sem código interno para o snapshot da venda");
+            }
+            item.setProduto(produto);
+        }
     }
 }

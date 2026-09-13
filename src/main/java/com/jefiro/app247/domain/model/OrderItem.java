@@ -68,12 +68,14 @@ public class OrderItem {
     private Instant createdAt;
 
     public static OrderItem snapshot(Order order, CartItem item) {
+        validarFonteDoSnapshot(order, item);
+        Produto produto = item.getProduto();
         OrderItem s = new OrderItem();
         s.order = order;
         s.empresa = order.getEmpresa();
-        s.produto = item.getProduto();
+        s.produto = produto;
         s.promocao = item.getPromocao();
-        s.codigoInterno = item.getProduto().getCodigoInterno();
+        s.codigoInterno = produto.getCodigoInterno();
         s.codigoBarras = item.getBarcode();
         s.nome = item.getName();
         s.unidadeMedida = item.getUnidadeMedida();
@@ -85,6 +87,28 @@ public class OrderItem {
         s.descontoCalculado = item.getCalculatedDiscount();
         s.subtotalCalculado = item.getCalculatedSubtotal();
         return s;
+    }
+
+    private static void validarFonteDoSnapshot(Order order, CartItem item) {
+        if (order == null || order.getEmpresa() == null) {
+            throw new IllegalStateException("Order sem empresa para gerar snapshot dos itens");
+        }
+        if (item == null || item.getProduto() == null) {
+            throw new IllegalStateException("CartItem sem produto para gerar snapshot da venda");
+        }
+        Produto produto = item.getProduto();
+        if (produto.getCodigoInterno() == null || produto.getCodigoInterno().isBlank()) {
+            throw new IllegalStateException("Produto sem código interno para gerar snapshot da venda");
+        }
+        if (item.getName() == null || item.getName().isBlank()
+                || item.getUnidadeMedida() == null
+                || item.getQuantity() == null || item.getQuantity().signum() <= 0
+                || item.getOriginalPrice() == null
+                || item.getUnitPrice() == null
+                || item.getCalculatedDiscount() == null
+                || item.getCalculatedSubtotal() == null) {
+            throw new IllegalStateException("CartItem possui dados obrigatórios incompletos para o snapshot da venda");
+        }
     }
 
     public String getIdItem() {
