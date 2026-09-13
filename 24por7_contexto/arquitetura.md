@@ -34,6 +34,7 @@ Não há separação por interfaces de casos de uso ou adaptadores: controllers 
 | Compra | `CarrinhoService`, `OrderService` | Materializa `CartItem`, calcula com precisão e congela `OrderItem` ao criar a venda. |
 | Checkout temporário | `CheckoutSessionService`, repository Redis | Sessão de 15 minutos, consulta de carrinho, vínculo de usuário e QR Code. |
 | Pagamento Point | `PagamentoService`, `PointPaymentPersistenceService`, `MercadoPagoCobrancaService` | Confirma a tentativa local, chama `/v1/orders` fora da transação e persiste a aceitação em nova transação. |
+| Comprovante | `ComprovanteController`, `ComprovanteSnapshotService`, `ComprovanteService`, FastAPI | Valida venda aprovada, monta snapshot histórico, envia JSON ao Python e deixa PNG/n8n fora do Spring. |
 | Webhook | controller, validador HMAC, Redis `mp_queue`, `PaymentWorker` | Autentica, deduplica, enfileira, consulta dados faltantes e atualiza pedido/pagamento. |
 | Identidade | `UserService`, `TokenService`, filtro de segurança | BCrypt, login por CPF, JWT e códigos temporários no Redis. |
 | Terminal | `TerminalService`, WebSocket handler | Ativação por serial, heartbeat/status e marcação periódica como offline. |
@@ -57,6 +58,7 @@ Os tipos exatos de request/response são definidos pelos DTOs. As rotas administ
 | `/checkout` | sessão, carrinho, QR Code e associação de usuário |
 | `/order` | criação/finalização e busca; ambos recebem o parâmetro chamado `carrinho_id`, embora a busca o use como ID da order |
 | `/pagamento` | `GET /terminal/{carrinho_id}` inicia cobrança Point |
+| `/comprovante` | `POST` solicita envio explícito de comprovante para WhatsApp ou e-mail |
 | `/terminal` | `GET /serial/{serial}` retorna dados de ativação |
 | `/mercado-pago` | início/callback OAuth e listagem tenant-aware de maquininhas; aliases legados permanecem em `/mp/oauth` |
 | `/terminais/{id}/mercado-pago` | vínculo e desvínculo entre terminal interno e maquininha Point |
@@ -96,7 +98,7 @@ O agendamento é habilitado em `App247Application`. A cada dois segundos, worker
 
 O `Dockerfile` usa build multi-stage com Maven e uma imagem final JRE 17. A aplicação roda como usuário sem privilégios, expõe `8080`, grava arquivos no volume `/app/uploads` e possui health check em `/actuator/health`.
 
-O `docker-compose.yml` sobe API, MySQL 8.4 e Redis 8. A API aguarda os health checks dos dois serviços de dados; banco, Redis e uploads usam volumes separados. As portas de MySQL e Redis são publicadas somente em `127.0.0.1`, enquanto a porta HTTP pode ser configurada por `APP_PORT`.
+O `docker-compose.yml` sobe API, MySQL 8.4, Redis 8 e o FastAPI interno `comprovante-service`. A API aguarda os health checks dos dois serviços de dados; comprovantes continuam opcionais e não impedem a API principal de iniciar. Banco, Redis e uploads usam volumes separados. As portas de MySQL e Redis são publicadas somente em `127.0.0.1`, a porta HTTP pode ser configurada por `APP_PORT` e o FastAPI usa apenas `expose: 8000`, sem publicação na internet.
 
 O MySQL usa o volume `mysql_data_v2`, intencionalmente novo por causa da substituição da cadeia histórica pela baseline V1–V11. Um volume `mysql_data` criado pelo Compose anterior não é apagado automaticamente, mas também não pode ser reutilizado diretamente com a nova cadeia Flyway.
 

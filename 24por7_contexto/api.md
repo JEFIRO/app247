@@ -555,6 +555,31 @@ Resposta `PaymentStatusResponse`: `type`, `orderId`, `cartId`, `paymentId`, `pay
 - Resposta: `200 PaymentStatusResponse`; `204` quando não há tentativa não resolvida.
 - Garantia: o endpoint nunca cria uma `PaymentAttempt` nova.
 
+## POST /comprovante
+
+- Finalidade: solicitação explícita, após a compra, de geração e envio do comprovante.
+- Segurança HTTP: pública temporariamente, como os endpoints do Terminal; `pedidoId` precisa pertencer exatamente ao `terminalId` informado.
+- Pré-condições: `Order.status=PROCESSED`, tentativa mais recente `PaymentAttempt.status=PROCESSED`, `paidAt` existente e snapshot histórico completo.
+- Request:
+
+```json
+{
+  "terminalId": "uuid-terminal",
+  "pedidoId": "uuid-order",
+  "tipoEnvio": "WHATSAPP",
+  "destinatario": "5575999999999"
+}
+```
+
+`tipoEnvio` aceita `WHATSAPP` ou `EMAIL`. Telefones brasileiros são normalizados para DDI `55`; e-mails são validados e normalizados. O destinatário completo não aparece nos logs.
+
+- Resposta: `status`, `pedido`, `tipoEnvio`, `n8nStatus` e `duplicado`.
+- Idempotência: Redis bloqueia envio concorrente para a mesma combinação pedido/canal/destinatário. Um envio confirmado responde `JA_ENVIADO` nas repetições durante o TTL, sem chamar novamente a FastAPI. A chave determinística é enviada como `request_id`, `X-Correlation-Id` e `X-Idempotency-Key` à FastAPI, que a propaga ao n8n. O workflow n8n ainda precisa deduplicar explicitamente pela chave para haver idempotência ponta a ponta.
+- Erros estruturados: `COMPROVANTE_INVALID_DESTINATION`, `COMPROVANTE_INVALID_ORDER_DATA`, `COMPROVANTE_ALREADY_PROCESSING`, `COMPROVANTE_IDEMPOTENCY_UNAVAILABLE`, `COMPROVANTE_SERVICE_TIMEOUT` e `COMPROVANTE_SEND_FAILED`.
+- Garantia financeira: nenhuma falha desse endpoint altera `Order`, `PaymentAttempt`, estoque ou a aprovação já confirmada.
+
+O contrato entre Spring e Python e a operação Docker estão detalhados em [[comprovante-compra]].
+
 # Mercado Pago e webhook
 
 ## GET /mercado-pago/oauth

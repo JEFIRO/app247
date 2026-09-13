@@ -31,6 +31,12 @@ services:
       MP_WEBHOOK_URL: "${MP_WEBHOOK_URL:-}"
       MP_TEST_ACCESS_TOKEN: "${MP_TEST_ACCESS_TOKEN:-}"
       MP_TEST_TERMINAL_ID: "${MP_TEST_TERMINAL_ID:-NEWLAND_N950__SBX0000001}"
+      COMPROVANTE_SERVICE_URL: "${COMPROVANTE_SERVICE_URL:-http://comprovante-service:8000}"
+      COMPROVANTE_CONNECT_TIMEOUT: "${COMPROVANTE_CONNECT_TIMEOUT:-3s}"
+      COMPROVANTE_READ_TIMEOUT: "${COMPROVANTE_READ_TIMEOUT:-35s}"
+      COMPROVANTE_PROCESSING_TTL: "${COMPROVANTE_PROCESSING_TTL:-PT2M}"
+      COMPROVANTE_SUCCESS_TTL: "${COMPROVANTE_SUCCESS_TTL:-P1D}"
+      COMPROVANTE_INTERNAL_TOKEN: "${COMPROVANTE_INTERNAL_TOKEN:-}"
       JAVA_TOOL_OPTIONS: "${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError}"
     depends_on:
       mysql:
@@ -50,6 +56,56 @@ services:
         max-size: 10m
         max-file: "3"
 
+  comprovante-service:
+    image: "${COMPROVANTE_IMAGE:-jefiroo/comprovante-service:2.0.0}"
+    container_name: comprovante-service
+    pull_policy: always
+    init: true
+    restart: unless-stopped
+
+    expose:
+      - "8000"
+
+    environment:
+      N8N_COMPROVANTE_WEBHOOK_URL: "${N8N_COMPROVANTE_WEBHOOK_URL:?N8N_COMPROVANTE_WEBHOOK_URL obrigatoria}"
+      N8N_COMPROVANTE_TIMEOUT_SECONDS: "${N8N_COMPROVANTE_TIMEOUT_SECONDS:-30}"
+      COMPROVANTE_LOGO_PATH: "${COMPROVANTE_LOGO_PATH:-/app/logo.png}"
+      COMPROVANTE_INTERNAL_TOKEN: "${COMPROVANTE_INTERNAL_TOKEN:?COMPROVANTE_INTERNAL_TOKEN obrigatorio}"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      LOG_LEVEL: "${COMPROVANTE_LOG_LEVEL:-INFO}"
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    read_only: true
+
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges:true
+
+    stop_grace_period: 15s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
   ngrok:
     image: ngrok/ngrok:latest
     container_name: ngrok
@@ -89,7 +145,6 @@ services:
       options:
         max-size: 10m
         max-file: "3"
-
   redis:
     image: redis:8-alpine
     restart: unless-stopped

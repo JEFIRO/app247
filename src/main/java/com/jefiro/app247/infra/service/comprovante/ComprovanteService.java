@@ -37,6 +37,8 @@ import java.util.UUID;
 public class ComprovanteService {
     private static final Logger log = LoggerFactory.getLogger(ComprovanteService.class);
     private static final String IDEMPOTENCY_HEADER = "X-Idempotency-Key";
+    private static final String CORRELATION_HEADER = "X-Correlation-Id";
+    private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
     private static final String SENT_PREFIX = "SENT:";
 
     private final ComprovanteSnapshotService snapshotService;
@@ -45,6 +47,7 @@ public class ComprovanteService {
     private final URI endpoint;
     private final Duration processingTtl;
     private final Duration successTtl;
+    private final String internalToken;
 
     @Autowired
     public ComprovanteService(
@@ -54,13 +57,15 @@ public class ComprovanteService {
             @Value("${app.comprovante.base-url:http://localhost:8000}") String baseUrl,
             @Value("${app.comprovante.endpoint:/comprovante}") String endpointPath,
             @Value("${app.comprovante.idempotency.processing-ttl:PT2M}") Duration processingTtl,
-            @Value("${app.comprovante.idempotency.success-ttl:P1D}") Duration successTtl) {
+            @Value("${app.comprovante.idempotency.success-ttl:P1D}") Duration successTtl,
+            @Value("${app.comprovante.internal-token:}") String internalToken) {
         this.snapshotService = snapshotService;
         this.restTemplate = restTemplate;
         this.redisTemplate = redisTemplate;
         this.endpoint = buildEndpoint(baseUrl, endpointPath);
         this.processingTtl = processingTtl;
         this.successTtl = successTtl;
+        this.internalToken = internalToken == null ? "" : internalToken;
     }
 
     public ComprovanteEnvioResponse enviar(ComprovanteRequest input) {
@@ -76,7 +81,7 @@ public class ComprovanteService {
         if (existing != null) {
             if (existing.startsWith(SENT_PREFIX)) {
                 return ComprovanteEnvioResponse.duplicate(
-                        receipt.pedido(), channel.name(), parseN8nStatus(existing));
+                        receipt.pedido(), channel.name(), null);
             }
             throw new ApiBusinessException(
                     HttpStatus.CONFLICT,
@@ -86,35 +91,42 @@ public class ComprovanteService {
         }
 
         String maskedDestination = channel.mask(destination);
-        log.info("[COMPROVANTE] orderId={} terminalId={} canal={} destinatarioMascarado={} status=REQUESTED",
-                receipt.pedido(), input.terminalId(), channel, maskedDestination);
+        log.info("[COMPROVANTE] requestId={} orderId={} terminalId={} canal={} destinatarioMascarado={} status=REQUESTED",
+                idempotencyId, receipt.pedido(), input.terminalId(), channel, maskedDestination);
 
         try {
             FastApiComprovanteResponse response = callFastApi(
-                    new EnviarComprovanteRequest(receipt, destination), idempotencyId);
-            markSent(redisKey, response.n8nStatus());
-            log.info("[COMPROVANTE] orderId={} terminalId={} canal={} status=SENT n8nStatus={}",
-                    receipt.pedido(), input.terminalId(), channel, response.n8nStatus());
+                    new EnviarComprovanteRequest(
+                            idempotencyId, channel.name(), receipt, destination), idempotencyId);
+            markSent(redisKey);
+            log.info("[COMPROVANTE] requestId={} orderId={} terminalId={} canal={} status=ACCEPTED",
+                    idempotencyId, receipt.pedido(), input.terminalId(), channel);
             return ComprovanteEnvioResponse.sent(
-                    receipt.pedido(), channel.name(), response.n8nStatus());
+                    receipt.pedido(), channel.name(), null);
         } catch (HttpClientErrorException exception) {
             release(redisKey, leaseValue);
-            throw integrationFailure(receipt.pedido(), channel, "FASTAPI_REJECTED", exception, false);
+            throw integrationFailure(idempotencyId, receipt.pedido(), channel,
+                    "FASTAPI_REJECTED", exception, false);
         } catch (HttpServerErrorException exception) {
             // O n8n pode ter recebido a imagem antes de uma resposta 5xx/timeout.
             // Mantemos o lease até expirar para impedir repetição imediata.
-            throw integrationFailure(receipt.pedido(), channel, "FASTAPI_OR_N8N_ERROR", exception, false);
+            boolean gatewayTimeout = exception.getStatusCode().value() == 504;
+            throw integrationFailure(idempotencyId, receipt.pedido(), channel,
+                    gatewayTimeout ? "FASTAPI_OR_N8N_TIMEOUT" : "FASTAPI_OR_N8N_ERROR",
+                    exception, gatewayTimeout);
         } catch (ResourceAccessException exception) {
             if (causedBy(exception, ConnectException.class)) {
                 release(redisKey, leaseValue);
-                throw integrationFailure(receipt.pedido(), channel, "FASTAPI_UNAVAILABLE", exception, false);
+                throw integrationFailure(idempotencyId, receipt.pedido(), channel,
+                        "FASTAPI_UNAVAILABLE", exception, false);
             }
             String reason = causedBy(exception, SocketTimeoutException.class)
                     ? "FASTAPI_TIMEOUT" : "FASTAPI_IO_ERROR";
-            throw integrationFailure(receipt.pedido(), channel, reason, exception,
+            throw integrationFailure(idempotencyId, receipt.pedido(), channel, reason, exception,
                     causedBy(exception, SocketTimeoutException.class));
         } catch (RestClientException exception) {
-            throw integrationFailure(receipt.pedido(), channel, "FASTAPI_INVALID_RESPONSE", exception, false);
+            throw integrationFailure(idempotencyId, receipt.pedido(), channel,
+                    "FASTAPI_INVALID_RESPONSE", exception, false);
         }
     }
 
@@ -124,6 +136,10 @@ public class ComprovanteService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set(IDEMPOTENCY_HEADER, idempotencyId);
+        headers.set(CORRELATION_HEADER, idempotencyId);
+        if (!internalToken.isBlank()) {
+            headers.set(INTERNAL_TOKEN_HEADER, internalToken);
+        }
 
         ResponseEntity<FastApiComprovanteResponse> response = restTemplate.exchange(
                 endpoint,
@@ -133,11 +149,11 @@ public class ComprovanteService {
         );
         FastApiComprovanteResponse body = response.getBody();
         if (body == null
-                || !"enviado".equalsIgnoreCase(body.status())
+                || !body.success()
+                || !"ACCEPTED".equalsIgnoreCase(body.status())
                 || !request.request().pedido().equals(body.pedido())
-                || body.n8nStatus() == null
-                || body.n8nStatus() < 200
-                || body.n8nStatus() >= 300) {
+                || !request.canal().equalsIgnoreCase(body.canal())
+                || !request.requestId().equals(body.requestId())) {
             throw new RestClientException("Resposta inválida do serviço de comprovantes");
         }
         return body;
@@ -153,7 +169,20 @@ public class ComprovanteService {
             if (Boolean.TRUE.equals(acquired)) {
                 return null;
             }
-            return redisTemplate.opsForValue().get(key);
+            String existing = redisTemplate.opsForValue().get(key);
+            if (existing != null) {
+                return existing;
+            }
+
+            // A chave pode expirar entre o SET NX e o GET. Tenta adquirir uma
+            // única vez; se outra thread ganhar, responde como processamento.
+            acquired = redisTemplate.opsForValue()
+                    .setIfAbsent(key, leaseValue, processingTtl);
+            if (Boolean.TRUE.equals(acquired)) {
+                return null;
+            }
+            existing = redisTemplate.opsForValue().get(key);
+            return existing != null ? existing : "PROCESSING:unknown";
         } catch (DataAccessException exception) {
             throw new ApiBusinessException(
                     HttpStatus.SERVICE_UNAVAILABLE,
@@ -163,9 +192,9 @@ public class ComprovanteService {
         }
     }
 
-    private void markSent(String key, Integer n8nStatus) {
+    private void markSent(String key) {
         try {
-            redisTemplate.opsForValue().set(key, SENT_PREFIX + n8nStatus, successTtl);
+            redisTemplate.opsForValue().set(key, SENT_PREFIX + "ACCEPTED", successTtl);
         } catch (DataAccessException exception) {
             // O envio externo já foi confirmado. A venda e a resposta de sucesso não
             // podem ser revertidas por uma falha posterior ao gravar a deduplicação.
@@ -184,13 +213,14 @@ public class ComprovanteService {
     }
 
     private ApiBusinessException integrationFailure(
+            String requestId,
             String orderId,
             DeliveryChannel channel,
             String reason,
             Exception exception,
             boolean timeout) {
-        log.error("[COMPROVANTE] orderId={} canal={} status=FAILED reason={}",
-                orderId, channel, reason, exception);
+        log.error("[COMPROVANTE] requestId={} orderId={} canal={} status=FAILED reason={}",
+                requestId, orderId, channel, reason, exception);
         if (timeout) {
             return new ApiBusinessException(
                     HttpStatus.GATEWAY_TIMEOUT,
@@ -203,14 +233,6 @@ public class ComprovanteService {
                 "COMPROVANTE_SEND_FAILED",
                 "Não foi possível gerar ou enviar o comprovante agora"
         );
-    }
-
-    private static int parseN8nStatus(String stored) {
-        try {
-            return Integer.parseInt(stored.substring(SENT_PREFIX.length()));
-        } catch (RuntimeException ignored) {
-            return 200;
-        }
     }
 
     private static URI buildEndpoint(String baseUrl, String path) {

@@ -51,6 +51,7 @@ Esta base descreve o backend conforme o código presente no repositório. O cód
 - [[mercado-pago-account-lifecycle]] — exclusividade ativa, histórico, reutilização, unlink e substituição de conta/Point.
 - [[payment-reconciliation]] — recuperação após backend/webhook offline, endpoint, scheduler, startup e idempotência.
 - [[payment-recovery]] — regra ponta a ponta contra cobrança duplicada, máquina de estados e roteiro operacional com Point offline.
+- [[comprovante-compra]] — solicitação explícita e idempotente Spring Boot → FastAPI → n8n para comprovante PNG.
 
 ## Auditoria e evolução
 
