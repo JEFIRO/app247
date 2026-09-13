@@ -19,4 +19,8 @@ public record PrecoCalculado(
     public BigDecimal subtotal(int quantidade) {
         return precoCalculado.multiply(BigDecimal.valueOf(quantidade));
     }
+
+    public BigDecimal subtotal(BigDecimal quantidade) {
+        return precoCalculado.multiply(quantidade);
+    }
 }

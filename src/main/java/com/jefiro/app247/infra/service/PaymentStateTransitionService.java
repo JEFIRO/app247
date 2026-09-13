@@ -1,11 +1,13 @@
 package com.jefiro.app247.infra.service;
 
 import com.jefiro.app247.domain.model.Order;
-import com.jefiro.app247.domain.model.Pagamento;
+import com.jefiro.app247.domain.model.PaymentAttempt;
 import com.jefiro.app247.domain.model.dto.PointPaymentResponse;
 import com.jefiro.app247.domain.model.enum_type.CarrinhoStatus;
 import com.jefiro.app247.domain.model.enum_type.PagamentoTipo;
 import com.jefiro.app247.domain.model.enum_type.PaymentMethodId;
+import com.jefiro.app247.domain.model.enum_type.PaymentProvider;
+import com.jefiro.app247.domain.model.enum_type.PagamentoStatus;
 import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
 import com.jefiro.app247.domain.model.enum_type.order.StatusDetail;
 import com.jefiro.app247.domain.model.mapper.MercadoPagoStatusMapper;
@@ -22,7 +24,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.NoSuchElementException;
 
@@ -33,6 +35,7 @@ public class PaymentStateTransitionService {
     @Autowired OrderService orderService;
     @Autowired CarrinhoService carrinhoService;
     @Autowired PagamentoRepository pagamentoRepository;
+    @Autowired com.jefiro.app247.infra.repository.PaymentEventRepository paymentEventRepository;
     @Autowired ApplicationEventPublisher eventPublisher;
 
     @Transactional
@@ -42,21 +45,24 @@ public class PaymentStateTransitionService {
             throw new UnknownExternalStatusException("Status Mercado Pago desconhecido: " + data.status());
         }
 
-        Order order;
-        try {
-            order = orderService.getOrderForUpdate(data.externalReference());
-        } catch (NoSuchElementException e) {
-            log.warn("Estado Mercado Pago ignorado: Order local não encontrada; externalReference={}, mpOrderId={}",
+        PaymentAttempt pagamento = pagamentoRepository.findForTransition(
+                PaymentProvider.MERCADO_PAGO, data.externalReference()).orElse(null);
+        if (pagamento == null) {
+            log.error("[PAYMENT-INTEGRITY] ATTEMPT_NOT_FOUND externalReference={} mpOrderId={}",
                     data.externalReference(), data.mercadoPagoOrderId());
-            return false;
+            throw new IllegalStateException("ATTEMPT_NOT_FOUND: webhook sem tentativa local persistida");
         }
-        if (order.getMpOrderId() != null && data.mercadoPagoOrderId() != null
-                && !order.getMpOrderId().equals(data.mercadoPagoOrderId())) {
+        Order order = pagamento.getOrder();
+        if (pagamento.getProviderOrderId() == null && data.mercadoPagoOrderId() != null) {
+            pagamento.setProviderOrderId(data.mercadoPagoOrderId());
+        }
+        if (pagamento.getProviderOrderId() != null && data.mercadoPagoOrderId() != null
+                && !pagamento.getProviderOrderId().equals(data.mercadoPagoOrderId())) {
             throw new IllegalStateException("Order Mercado Pago divergente da cobrança persistida");
         }
-        if (isStale(order, data.version())) {
+        if (isStale(pagamento, data.version())) {
             log.info("Estado Mercado Pago obsoleto ignorado: orderId={}, version={}, currentVersion={}",
-                    order.getIdOrder(), data.version(), order.getMpEventVersion());
+                    order.getIdOrder(), data.version(), pagamento.getProviderEventVersion());
             return false;
         }
 
@@ -67,20 +73,15 @@ public class PaymentStateTransitionService {
                     order.getIdOrder(), localStatus, remoteStatus, data.version());
             return false;
         }
-        Pagamento pagamento = order.getPagamento();
-        if (pagamento == null) {
-            throw new IllegalStateException("Order " + order.getIdOrder() + " não possui Pagamento vinculado");
-        }
-
-        pagamento.setStatusDetail(data.paymentStatusDetail());
-        pagamento.setUpdatedAt(LocalDateTime.now());
+        PagamentoStatus pagamentoAnterior = pagamento.getStatus();
+        pagamento.setUpdatedAt(Instant.now());
         if (data.paymentId() != null) pagamento.setTransactionId(data.paymentId());
         pagamento.setStatus(MercadoPagoStatusMapper.toPagamentoStatus(remoteStatus));
 
         Object domainEvent = null;
         switch (remoteStatus) {
             case PROCESSED -> {
-                LocalDateTime paidAt = pagamento.getPaidAt() != null ? pagamento.getPaidAt() : LocalDateTime.now();
+                Instant paidAt = pagamento.getPaidAt() != null ? pagamento.getPaidAt() : Instant.now();
                 pagamento.setPaidAt(paidAt);
                 order.setPaidAt(paidAt);
                 if (order.getCarrinho() != null) order.getCarrinho().setStatus(CarrinhoStatus.PAID);
@@ -108,13 +109,15 @@ public class PaymentStateTransitionService {
             case ACTION_REQUIRED, CREATED, AT_TERMINAL, PENDING -> { }
         }
 
-        order.setMpStatus(remoteStatus);
-        order.setMpStatusDetail(StatusDetail.findByValue(data.orderStatusDetail()));
+        // O detalhe da transação é mais específico (ex.: insufficient_amount) que o detalhe da Order.
+        pagamento.setStatusDetail(data.paymentStatusDetail() != null
+                ? data.paymentStatusDetail() : data.orderStatusDetail());
         order.setStatus(remoteStatus);
-        if (data.version() != null) order.setMpEventVersion(data.version());
-        order.setMpEventDate(parseDate(data.eventDate()));
+        if (data.version() != null) pagamento.setProviderEventVersion(data.version());
+        pagamento.setProviderEventAt(parseDate(data.eventDate()));
 
         pagamentoRepository.saveAndFlush(pagamento);
+        registrarEvento(pagamento, pagamentoAnterior, data, remoteStatus);
         orderService.save(order);
         if (order.getCarrinho() != null) carrinhoService.save(order.getCarrinho());
         if (domainEvent != null) eventPublisher.publishEvent(domainEvent);
@@ -126,19 +129,36 @@ public class PaymentStateTransitionService {
         return stateChanged;
     }
 
-    private boolean isStale(Order order, Integer receivedVersion) {
-        return receivedVersion != null && order.getMpEventVersion() != null
-                && receivedVersion <= order.getMpEventVersion();
+    private void registrarEvento(PaymentAttempt attempt, PagamentoStatus anterior,
+                                  MercadoPagoOrderState data, OrderStatus remoteStatus) {
+        com.jefiro.app247.domain.model.PaymentEvent event = new com.jefiro.app247.domain.model.PaymentEvent();
+        event.setPaymentAttempt(attempt);
+        event.setEmpresa(attempt.getEmpresa());
+        event.setProvider(attempt.getProvider());
+        event.setEventType("ORDER_" + remoteStatus.name());
+        event.setStatusAnterior(anterior);
+        event.setStatusNovo(attempt.getStatus());
+        event.setProviderEventId(data.mercadoPagoOrderId() + ":" +
+                (data.version() != null ? data.version() : data.status() + ":" + data.eventDate()));
+        event.setProviderVersion(data.version());
+        Instant occurred = parseDate(data.eventDate());
+        event.setOccurredAt(occurred != null ? occurred : Instant.now());
+        paymentEventRepository.save(event);
+    }
+
+    private boolean isStale(PaymentAttempt attempt, Integer receivedVersion) {
+        return receivedVersion != null && attempt.getProviderEventVersion() != null
+                && receivedVersion <= attempt.getProviderEventVersion();
     }
 
     private void markCartCanceled(Order order) {
         if (order.getCarrinho() != null) order.getCarrinho().setStatus(CarrinhoStatus.CANCELED);
     }
 
-    private LocalDateTime parseDate(String value) {
+    private Instant parseDate(String value) {
         if (value == null || value.isBlank()) return null;
         try {
-            return OffsetDateTime.parse(value).toLocalDateTime();
+            return OffsetDateTime.parse(value).toInstant();
         } catch (java.time.format.DateTimeParseException e) {
             log.warn("Data de estado Mercado Pago inválida: {}", value);
             return null;

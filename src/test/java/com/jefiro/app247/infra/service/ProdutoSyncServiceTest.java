@@ -4,6 +4,7 @@ import com.jefiro.app247.domain.model.Condominio;
 import com.jefiro.app247.domain.model.EstoqueCondominio;
 import com.jefiro.app247.domain.model.Empresa;
 import com.jefiro.app247.domain.model.Produto;
+import com.jefiro.app247.domain.model.ProdutoCodigoBarras;
 import com.jefiro.app247.domain.model.enum_type.ProdutoSyncOperation;
 import com.jefiro.app247.domain.model.terminal.Terminal;
 import com.jefiro.app247.infra.repository.EstoqueCondominioRepository;
@@ -18,7 +19,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -49,6 +49,14 @@ class ProdutoSyncServiceTest {
     @Test
     void fullSyncRetornaSomenteCatalogoAtualComoUpsert() {
         var estoque = estoque(true, true);
+        ProdutoCodigoBarras principal = new ProdutoCodigoBarras();
+        principal.setId("barcode-a");
+        principal.setProduto(estoque.getProduto());
+        principal.setCodigoBarras("789123");
+        principal.setTipo("EAN");
+        principal.setPrincipal(true);
+        principal.setAtivo(true);
+        estoque.getProduto().getCodigosBarras().add(principal);
         when(terminalRepository.findById("terminal-a")).thenReturn(Optional.of(terminal()));
         when(estoqueRepository.findCurrentCatalog("cond-a")).thenReturn(List.of(estoque));
 
@@ -57,6 +65,9 @@ class ProdutoSyncServiceTest {
         assertTrue(response.fullSync());
         assertEquals(ProdutoSyncOperation.UPSERT, response.changes().get(0).operation());
         assertEquals("prod-a", response.changes().get(0).produto().id());
+        assertEquals("789", response.changes().get(0).produto().codigoInterno());
+        assertEquals("789123", response.changes().get(0).produto().codigosBarras().get(0).codigo());
+        assertTrue(response.changes().get(0).produto().codigosBarras().get(0).principal());
         verify(estoqueRepository, never()).findCatalogChanges(anyString(), any(), any());
     }
 
@@ -101,6 +112,27 @@ class ProdutoSyncServiceTest {
     }
 
     @Test
+    void incrementalRecuperaTransicaoTemporalDePromocaoDuranteOffline() {
+        var estoque = estoque(true, true);
+        when(terminalRepository.findById("terminal-a")).thenReturn(Optional.of(terminal()));
+        when(estoqueRepository.findCatalogChanges(eq("cond-a"), any(), any()))
+                .thenReturn(List.of());
+        when(promocaoProdutoRepository.findProductIdsWithTemporalTransition(
+                eq("empresa-a"), eq("cond-a"), any(), any()))
+                .thenReturn(List.of("prod-a"));
+        when(estoqueRepository.findCatalogEntry("cond-a", "prod-a"))
+                .thenReturn(Optional.of(estoque));
+
+        var response = service.sincronizar(
+                "terminal-a", Optional.of(Instant.parse("2026-08-24T16:00:00Z")));
+
+        assertFalse(response.fullSync());
+        assertEquals(1, response.changes().size());
+        assertEquals(ProdutoSyncOperation.UPSERT, response.changes().get(0).operation());
+        verify(pricingService).calcular(eq(estoque.getProduto()), any(Condominio.class), any());
+    }
+
+    @Test
     void incrementalRetornaRemocaoQuandoProdutoFoiDesativadoGlobalmente() {
         var estoque = estoque(true, false);
         when(terminalRepository.findById("terminal-a")).thenReturn(Optional.of(terminal()));
@@ -131,13 +163,13 @@ class ProdutoSyncServiceTest {
         produto.setCodigo("789");
         produto.setPreco(BigDecimal.valueOf(7));
         produto.setStatus(produtoAtivo);
-        produto.setCreateAt(LocalDateTime.of(2026, 8, 24, 15, 0));
-        produto.setUpdateAt(LocalDateTime.of(2026, 8, 24, 16, 30));
+        produto.setCreateAt(Instant.parse("2026-08-24T15:00:00Z"));
+        produto.setUpdateAt(Instant.parse("2026-08-24T16:30:00Z"));
         EstoqueCondominio estoque = new EstoqueCondominio();
         estoque.setProduto(produto);
         estoque.setAtivo(estoqueAtivo);
         estoque.setQuantidade(BigDecimal.valueOf(-1));
-        estoque.setUpdatedAt(LocalDateTime.of(2026, 8, 24, 16, 20));
+        estoque.setUpdatedAt(Instant.parse("2026-08-24T16:20:00Z"));
         return estoque;
     }
 }

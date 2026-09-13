@@ -53,6 +53,33 @@ class CarrinhoServiceTest {
     }
 
     @Test
+    void congelaCodigoDeBarrasEfetivamenteLido() {
+        Empresa empresa = Empresa.builder().id("empresa-a").build();
+        Terminal terminal = terminal(empresa);
+        Produto produto = produto("produto-a", empresa, "7.50");
+        ProdutoCodigoBarras barcode = new ProdutoCodigoBarras();
+        barcode.setId("barcode-a");
+        barcode.setProduto(produto);
+        barcode.setEmpresa(empresa);
+        barcode.setCodigoBarras("789123");
+        when(terminalRepository.findById("terminal-a")).thenReturn(Optional.of(terminal));
+        when(produtoService.buscarPorIdDoTenant("produto-a", "empresa-a")).thenReturn(produto);
+        when(produtoService.validarCodigoBarrasDoProduto("empresa-a", "produto-a", "789123"))
+                .thenReturn(barcode);
+        when(pricingService.calcular(eq(produto), eq(terminal.getCondominio()), any()))
+                .thenReturn(precoNormal(produto));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Carrinho carrinho = service.save(new CarrinhoRequest("terminal-a", List.of(
+                new ItemRequest("produto-a", BigDecimal.ONE, null, null, "789123"))));
+        Order order = new Order(carrinho);
+
+        assertEquals("789123", carrinho.getItems().get(0).getBarcode());
+        assertSame(barcode, carrinho.getItems().get(0).getCodigoBarrasReferencia());
+        assertEquals("789123", order.getItems().get(0).getCodigoBarras());
+    }
+
+    @Test
     void rejeitaProdutoDuplicadoNoMesmoCarrinho() {
         Empresa empresa = Empresa.builder().id("empresa-a").build();
         Terminal terminal = terminal(empresa);
@@ -80,7 +107,7 @@ class CarrinhoServiceTest {
         Empresa empresa = Empresa.builder().id("empresa-a").build();
         Terminal terminal = terminal(empresa);
         Produto produto = produto("produto-a", empresa, "7.50");
-        Item item = new Item(produto, 2, null);
+        CartItem item = new CartItem(produto, 2, null);
         item.setEmpresa(empresa);
         Carrinho carrinho = new Carrinho();
         carrinho.setEmpresa(empresa);

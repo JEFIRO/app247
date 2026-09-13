@@ -4,17 +4,23 @@ import com.jefiro.app247.domain.model.EstoqueCondominio;
 import com.jefiro.app247.domain.model.enum_type.ProdutoCategoria;
 import com.jefiro.app247.domain.model.enum_type.UnidadeMedida;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.List;
 
 public record ProdutoTerminalResponse(
-        String id, String codigo, String nome, String descricao, BigDecimal precoOriginal,
+        String id, String codigo, String codigoInterno, List<ProdutoCodigoBarrasDTO> codigosBarras,
+        String nome, String descricao, BigDecimal precoOriginal,
         BigDecimal preco, boolean emPromocao, String promocaoId, String promocaoNome,
         UnidadeMedida unidadeMedida, ProdutoCategoria categoria, BigDecimal peso,
         BigDecimal pesoTolerancia, String foto, boolean ativo, BigDecimal quantidade,
-        LocalDateTime createdAt, LocalDateTime updatedAt
+        Instant createdAt, Instant updatedAt
 ) {
     public ProdutoTerminalResponse(EstoqueCondominio estoque, PrecoCalculado calculado) {
         this(estoque.getProduto().getIdProduto(), estoque.getProduto().getCodigo(),
+                estoque.getProduto().getCodigoInterno(),
+                estoque.getProduto().getCodigosBarras().stream()
+                        .filter(c -> Boolean.TRUE.equals(c.getAtivo()))
+                        .map(ProdutoCodigoBarrasDTO::new).toList(),
                 estoque.getProduto().getNome(), estoque.getProduto().getDescricao(),
                 calculado.precoOriginal(), calculado.precoCalculado(), calculado.emPromocao(),
                 calculado.promocao() != null ? calculado.promocao().getIdPromocao() : null,

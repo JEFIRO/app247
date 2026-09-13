@@ -5,6 +5,8 @@ import com.jefiro.app247.domain.model.dto.TerminalRequest;
 import com.jefiro.app247.domain.model.dto.TerminalResponseDTO;
 import com.jefiro.app247.infra.service.TerminalService;
 import com.jefiro.app247.infra.service.MercadoPagoTerminalService;
+import com.jefiro.app247.infra.service.TerminalLifecycleService;
+import com.jefiro.app247.domain.model.dto.TerminalBootstrapResponse;
 import com.jefiro.app247.infra.dto.mercadopago.VincularTerminalMercadoPagoRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -17,10 +19,13 @@ import java.util.List;
 public class TerminalController {
     private final TerminalService service;
     private final MercadoPagoTerminalService mercadoPagoTerminalService;
+    private final TerminalLifecycleService lifecycleService;
 
-    public TerminalController(TerminalService service, MercadoPagoTerminalService mercadoPagoTerminalService) {
+    public TerminalController(TerminalService service, MercadoPagoTerminalService mercadoPagoTerminalService,
+                              TerminalLifecycleService lifecycleService) {
         this.service = service;
         this.mercadoPagoTerminalService = mercadoPagoTerminalService;
+        this.lifecycleService = lifecycleService;
     }
 
     @GetMapping("/terminal/serial/{serial}")
@@ -66,6 +71,23 @@ public class TerminalController {
     @DeleteMapping("/terminais/{terminalId}/mercado-pago")
     public ResponseEntity<Void> desvincularMercadoPago(@PathVariable String terminalId) {
         mercadoPagoTerminalService.desvincular(terminalId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/terminal/{terminalId}/bootstrap")
+    public ResponseEntity<TerminalBootstrapResponse> bootstrap(@PathVariable String terminalId) {
+        return ResponseEntity.ok(lifecycleService.consultar(terminalId));
+    }
+
+    @PostMapping("/terminal/{terminalId}/factory-reset/started")
+    public ResponseEntity<Void> factoryResetStarted(@PathVariable String terminalId) {
+        lifecycleService.confirmarInicio(terminalId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/terminal/{terminalId}/factory-reset/completed")
+    public ResponseEntity<Void> factoryResetCompleted(@PathVariable String terminalId) {
+        lifecycleService.confirmarConclusao(terminalId);
         return ResponseEntity.noContent().build();
     }
 }

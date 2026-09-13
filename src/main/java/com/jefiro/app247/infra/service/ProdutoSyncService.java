@@ -13,8 +13,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.LinkedHashMap;
 
@@ -35,15 +33,14 @@ public class ProdutoSyncService {
         String condominioId = condominio.getIdCondominio();
         String empresaId = condominio.getEmpresa().getId();
         Instant syncAt = Instant.now();
-        LocalDateTime limite = LocalDateTime.ofInstant(syncAt, ZoneOffset.UTC);
 
         var estoquesPorProduto = new LinkedHashMap<String, com.jefiro.app247.domain.model.EstoqueCondominio>();
         if (lastSync.isPresent()) {
-            LocalDateTime cursor = LocalDateTime.ofInstant(lastSync.get(), ZoneOffset.UTC);
-            estoqueRepository.findCatalogChanges(condominioId, cursor, limite)
+            Instant cursor = lastSync.get();
+            estoqueRepository.findCatalogChanges(condominioId, cursor, syncAt)
                     .forEach(e -> estoquesPorProduto.put(e.getProduto().getIdProduto(), e));
             promocaoProdutoRepository.findProductIdsWithTemporalTransition(
-                            empresaId, condominioId, cursor, limite).stream()
+                            empresaId, condominioId, cursor, syncAt).stream()
                     .filter(id -> !estoquesPorProduto.containsKey(id))
                     .map(id -> estoqueRepository.findCatalogEntry(condominioId, id))
                     .flatMap(Optional::stream)
@@ -56,7 +53,7 @@ public class ProdutoSyncService {
         var changes = estoques.stream().map(estoque -> {
             boolean disponivel = Boolean.TRUE.equals(estoque.getAtivo()) && estoque.getProduto().isStatus();
             return ProdutoSyncChange.from(estoque, disponivel
-                    ? pricingService.calcular(estoque.getProduto(), condominio, limite)
+                    ? pricingService.calcular(estoque.getProduto(), condominio, syncAt)
                     : null);
         }).toList();
 

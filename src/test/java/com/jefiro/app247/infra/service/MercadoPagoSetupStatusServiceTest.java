@@ -1,7 +1,6 @@
 package com.jefiro.app247.infra.service;
 
 import com.jefiro.app247.domain.model.MercadoPagoConta;
-import com.jefiro.app247.domain.model.terminal.Terminal;
 import com.jefiro.app247.infra.dto.mercadopago.MercadoPagoSetupStatusResponse;
 import com.jefiro.app247.infra.repository.OauthMercadoPagoRepository;
 import com.jefiro.app247.infra.repository.TerminalRepository;
@@ -12,8 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.LocalDateTime;
-import java.util.List;
+import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,13 +21,15 @@ import static org.mockito.Mockito.when;
 class MercadoPagoSetupStatusServiceTest {
     @Mock OauthMercadoPagoRepository contaRepository;
     @Mock TerminalRepository terminalRepository;
+    @Mock MercadoPagoAccountLifecycleService accountLifecycleService;
 
     private MercadoPagoSetupStatusService service;
 
     @BeforeEach
     void setUp() {
         EmpresaContext.set("empresa-a");
-        service = new MercadoPagoSetupStatusService(contaRepository, terminalRepository);
+        service = new MercadoPagoSetupStatusService(
+                contaRepository, terminalRepository, accountLifecycleService);
     }
 
     @AfterEach
@@ -39,10 +39,10 @@ class MercadoPagoSetupStatusServiceTest {
 
     @Test
     void informaConfiguracaoAusente() {
-        when(contaRepository.findByEmpresaId("empresa-a")).thenReturn(Optional.empty());
+        when(accountLifecycleService.findAtivaPorEmpresa("empresa-a")).thenReturn(Optional.empty());
         when(terminalRepository.countByCondominioEmpresaId("empresa-a")).thenReturn(3L);
-        when(terminalRepository.findAllByCondominioEmpresaIdAndMercadoPagoTerminalIdIsNotNull("empresa-a"))
-                .thenReturn(List.of());
+        when(terminalRepository.countByCondominioEmpresaIdAndMercadoPagoTerminalIdIsNotNull("empresa-a"))
+                .thenReturn(0L);
 
         MercadoPagoSetupStatusResponse status = service.consultar();
 
@@ -54,10 +54,10 @@ class MercadoPagoSetupStatusServiceTest {
 
     @Test
     void contaValidaSemMaquininhaContinuaPendente() {
-        when(contaRepository.findByEmpresaId("empresa-a")).thenReturn(Optional.of(contaValida()));
+        when(accountLifecycleService.findAtivaPorEmpresa("empresa-a")).thenReturn(Optional.of(contaValida()));
         when(terminalRepository.countByCondominioEmpresaId("empresa-a")).thenReturn(1L);
-        when(terminalRepository.findAllByCondominioEmpresaIdAndMercadoPagoTerminalIdIsNotNull("empresa-a"))
-                .thenReturn(List.of());
+        when(terminalRepository.countByCondominioEmpresaIdAndMercadoPagoTerminalIdIsNotNull("empresa-a"))
+                .thenReturn(0L);
 
         MercadoPagoSetupStatusResponse status = service.consultar();
 
@@ -68,12 +68,10 @@ class MercadoPagoSetupStatusServiceTest {
 
     @Test
     void contaValidaEQualquerMaquininhaConcluemConfiguracaoMinima() {
-        Terminal terminal = new Terminal();
-        terminal.setMercadoPagoTerminalId("POINT-1");
-        when(contaRepository.findByEmpresaId("empresa-a")).thenReturn(Optional.of(contaValida()));
+        when(accountLifecycleService.findAtivaPorEmpresa("empresa-a")).thenReturn(Optional.of(contaValida()));
         when(terminalRepository.countByCondominioEmpresaId("empresa-a")).thenReturn(3L);
-        when(terminalRepository.findAllByCondominioEmpresaIdAndMercadoPagoTerminalIdIsNotNull("empresa-a"))
-                .thenReturn(List.of(terminal));
+        when(terminalRepository.countByCondominioEmpresaIdAndMercadoPagoTerminalIdIsNotNull("empresa-a"))
+                .thenReturn(1L);
 
         MercadoPagoSetupStatusResponse status = service.consultar();
 
@@ -84,11 +82,11 @@ class MercadoPagoSetupStatusServiceTest {
     @Test
     void autorizacaoExpiradaNaoContaComoVinculada() {
         MercadoPagoConta conta = contaValida();
-        conta.setDataExpiracao(LocalDateTime.now().minusMinutes(1));
-        when(contaRepository.findByEmpresaId("empresa-a")).thenReturn(Optional.of(conta));
+        conta.setDataExpiracao(Instant.now().minusSeconds(60));
+        when(accountLifecycleService.findAtivaPorEmpresa("empresa-a")).thenReturn(Optional.of(conta));
         when(terminalRepository.countByCondominioEmpresaId("empresa-a")).thenReturn(0L);
-        when(terminalRepository.findAllByCondominioEmpresaIdAndMercadoPagoTerminalIdIsNotNull("empresa-a"))
-                .thenReturn(List.of());
+        when(terminalRepository.countByCondominioEmpresaIdAndMercadoPagoTerminalIdIsNotNull("empresa-a"))
+                .thenReturn(0L);
 
         assertThat(service.consultar().contaVinculada()).isFalse();
     }
@@ -96,7 +94,7 @@ class MercadoPagoSetupStatusServiceTest {
     private MercadoPagoConta contaValida() {
         return MercadoPagoConta.builder()
                 .accessToken("token")
-                .dataExpiracao(LocalDateTime.now().plusHours(1))
+                .dataExpiracao(Instant.now().plusSeconds(3600))
                 .build();
     }
 }

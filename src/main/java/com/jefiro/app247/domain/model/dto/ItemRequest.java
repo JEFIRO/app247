@@ -8,12 +8,21 @@ import java.math.BigDecimal;
 
 public record ItemRequest(
         @NotBlank String productId,
-        @NotNull @Positive Integer quantity,
+        @NotNull @Positive BigDecimal quantity,
         BigDecimal receivedWeight,
-        BigDecimal expectedUnitPrice
+        BigDecimal expectedUnitPrice,
+        String codigoBarras
 
 ) {
     public ItemRequest(String productId, Integer quantity, BigDecimal receivedWeight) {
-        this(productId, quantity, receivedWeight, null);
+        this(productId, new BigDecimal(quantity), receivedWeight, null, null);
+    }
+
+    public ItemRequest(String productId, Integer quantity, BigDecimal receivedWeight, BigDecimal expectedUnitPrice) {
+        this(productId, new BigDecimal(quantity), receivedWeight, expectedUnitPrice, null);
+    }
+
+    public ItemRequest(String productId, BigDecimal quantity, BigDecimal receivedWeight, BigDecimal expectedUnitPrice) {
+        this(productId, quantity, receivedWeight, expectedUnitPrice, null);
     }
 }

@@ -7,7 +7,7 @@ import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
 import com.jefiro.app247.domain.model.dto.response.CarrinhoResponseDTO;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record OrderDetailResponse(
         String orderId,
@@ -17,9 +17,9 @@ public record OrderDetailResponse(
         BigDecimal total,
         BigDecimal totalCalculado,
         BigDecimal totalCobrado,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt,
-        LocalDateTime paidAt,
+        Instant createdAt,
+        Instant updatedAt,
+        Instant paidAt,
         String mercadoPagoOrderId,
         Integer mercadoPagoEventVersion,
         CarrinhoResponseDTO carrinho,

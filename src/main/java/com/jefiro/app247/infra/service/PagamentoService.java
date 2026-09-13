@@ -2,13 +2,9 @@ package com.jefiro.app247.infra.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jefiro.app247.domain.model.Carrinho;
-import com.jefiro.app247.domain.model.Order;
-import com.jefiro.app247.domain.model.Pagamento;
 import com.jefiro.app247.domain.model.dto.OrderResponse;
 import com.jefiro.app247.domain.model.dto.mercadopago.OrderWebhookNotification;
 import com.jefiro.app247.domain.model.dto.PointPaymentResponse;
-import com.jefiro.app247.infra.repository.PagamentoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,8 +21,6 @@ public class PagamentoService {
     @Autowired
     CarrinhoService carrinhoService;
     @Autowired
-    PagamentoRepository pagamentoRepository;
-    @Autowired
     ObjectMapper mapper;
     @Autowired
     MercadoPagoOrderQueryService mercadoPagoOrderQueryService;
@@ -34,30 +28,34 @@ public class PagamentoService {
     PaymentStateTransitionService transitionService;
     @Autowired
     PaymentReconciliationService reconciliationService;
+    @Autowired
+    PointPaymentPersistenceService pointPaymentPersistenceService;
+    @Autowired
+    PointPaymentSubmissionService submissionService;
 
-    @Transactional
     public PointPaymentResponse gerarCobranca(String carrinho_id) {
-        orderService.findByCarrinho(carrinho_id)
-                .filter(order -> order.getMpOrderId() != null)
-                .ifPresent(order -> {
-                    try {
-                        reconciliationService.reconcileOrder(order.getIdOrder());
-                    } catch (RuntimeException error) {
-                        // Estado desconhecido não autoriza criar outra cobrança; criarCobranca reutilizará mpOrderId.
-                        log.warn("[PAYMENT-RECONCILIATION] falha antes de reutilizar cobrança; orderId={} errorType={}",
-                                order.getIdOrder(), error.getClass().getSimpleName());
-                    }
-                });
-        Carrinho carrinho = carrinhoService.getByIdForUpdate(carrinho_id);
-        Order order = orderService.criarCobranca(carrinho);
-        return PointPaymentResponse.from(order);
+        log.info("[PAYMENT-BACKEND] iniciando tentativa cartId={}", carrinho_id);
+        PointPaymentPersistenceService.PreparedAttempt attempt =
+                pointPaymentPersistenceService.prepare(carrinho_id);
+
+        log.info("[PAYMENT] tentativa resolvida origin=TERMINAL_REQUEST orderId={} attemptId={} remoteOrderId={} submitOwner={}",
+                attempt.orderId(), attempt.paymentAttemptId(), attempt.mercadoPagoOrderId(),
+                attempt.shouldSubmit());
+
+        if (!attempt.shouldSubmit()) {
+            if (attempt.mercadoPagoOrderId() != null) {
+                try {
+                    reconciliationService.reconcileOrder(attempt.orderId());
+                } catch (RuntimeException error) {
+                    log.warn("[PAYMENT-RECONCILIATION] falha antes de reutilizar cobrança; orderId={} errorType={}",
+                            attempt.orderId(), error.getClass().getSimpleName());
+                }
+            }
+            return pointPaymentPersistenceService.current(attempt.orderId());
+        }
+
+        return submissionService.submitSameAttempt(attempt.orderId(), "TERMINAL_REQUEST");
     }
-
-    public Pagamento save(Pagamento pagamento) {
-        return pagamentoRepository.saveAndFlush(pagamento);
-
-    }
-
 
     @Transactional
     public void atualizarPagamento(String json) throws JsonProcessingException {

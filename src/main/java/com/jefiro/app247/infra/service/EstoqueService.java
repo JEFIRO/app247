@@ -30,6 +30,7 @@ public class EstoqueService {
     @Autowired private TerminalService terminalService;
     @Autowired private ApplicationEventPublisher eventPublisher;
     @Autowired private PricingService pricingService;
+    @Autowired private AuditLogService auditLogService;
 
     public List<ProdutoTerminalResponse> listarProdutosDoTerminal(String terminalId) {
         var terminal = terminalService.getTerminal(terminalId);
@@ -41,7 +42,7 @@ public class EstoqueService {
                 .filter(estoque -> estoque.getProduto().isStatus())
                 .map(estoque -> new ProdutoTerminalResponse(estoque, pricingService.calcular(
                         estoque.getProduto(), terminal.getCondominio(),
-                        java.time.LocalDateTime.now(java.time.ZoneOffset.UTC))))
+                        java.time.Instant.now())))
                 .toList();
     }
 
@@ -123,6 +124,8 @@ public class EstoqueService {
         if (quantidade.signum() < 0) throw new IllegalArgumentException("Entrada deve ser positiva");
         EstoqueCondominio estoque = estoqueDoTenantParaAtualizacao(condominioId, produtoId);
         movimentar(estoque, quantidade, TipoMovimentacaoEstoque.ENTRADA, null, null, motivo, null);
+        auditLogService.record(estoque.getEmpresa(), "STOCK_ENTRY", "EstoqueCondominio", estoque.getId(),
+                null, java.util.Map.of("quantidade", quantidade, "saldo", estoque.getQuantidade()), java.util.Map.of("motivo", motivo == null ? "" : motivo));
         return new EstoqueResponse(estoque);
     }
 
@@ -131,25 +134,27 @@ public class EstoqueService {
         EstoqueCondominio estoque = estoqueDoTenantParaAtualizacao(condominioId, produtoId);
         movimentar(estoque, novaQuantidade.subtract(estoque.getQuantidade()), TipoMovimentacaoEstoque.AJUSTE,
                 null, null, motivo, null);
+        auditLogService.record(estoque.getEmpresa(), "STOCK_ADJUSTED", "EstoqueCondominio", estoque.getId(),
+                null, java.util.Map.of("saldo", estoque.getQuantidade()), java.util.Map.of("motivo", motivo == null ? "" : motivo));
         return new EstoqueResponse(estoque);
     }
 
     @Transactional
     public void reservar(Order order) {
-        for (Item item : order.getCarrinho().getItems()) {
+        for (OrderItem item : order.getItems()) {
             String chave = chave(order, item, "RESERVA");
             if (movimentacaoRepository.existsByChaveIdempotencia(chave)) continue;
             EstoqueCondominio estoque = estoqueRepository.findForUpdate(
                     order.getCarrinho().getTerminal().getCondominio().getIdCondominio(), item.getProduto().getIdProduto())
                     .orElseThrow(() -> new IllegalStateException("Produto não disponível neste condomínio"));
-            movimentar(estoque, BigDecimal.valueOf(item.getQuantity()).negate(), TipoMovimentacaoEstoque.RESERVA,
+            movimentar(estoque, item.getQuantidade().negate(), TipoMovimentacaoEstoque.RESERVA,
                     order, item, "Reserva do checkout", chave);
         }
     }
 
     @Transactional
     public void confirmarVenda(Order order) {
-        for (Item item : order.getCarrinho().getItems()) {
+        for (OrderItem item : order.getItems()) {
             String chave = chave(order, item, "VENDA");
             if (movimentacaoRepository.existsByChaveIdempotencia(chave)) continue;
             if (!movimentacaoRepository.existsByChaveIdempotencia(chave(order, item, "RESERVA"))) {
@@ -166,7 +171,7 @@ public class EstoqueService {
 
     @Transactional
     public void liberar(Order order, boolean cancelamento) {
-        for (Item item : order.getCarrinho().getItems()) {
+        for (OrderItem item : order.getItems()) {
             String chaveLiberacao = chave(order, item, "LIBERACAO");
             if (movimentacaoRepository.existsByChaveIdempotencia(chaveLiberacao)) continue;
             boolean reservada = movimentacaoRepository.existsByChaveIdempotencia(chave(order, item, "RESERVA"));
@@ -174,7 +179,7 @@ public class EstoqueService {
             EstoqueCondominio estoque = estoqueRepository.findForUpdate(
                     order.getCarrinho().getTerminal().getCondominio().getIdCondominio(), item.getProduto().getIdProduto())
                     .orElseThrow();
-            movimentar(estoque, BigDecimal.valueOf(item.getQuantity()), cancelamento
+            movimentar(estoque, item.getQuantidade(), cancelamento
                             ? TipoMovimentacaoEstoque.CANCELAMENTO : TipoMovimentacaoEstoque.LIBERACAO_RESERVA,
                     order, item, cancelamento ? "Cancelamento/reembolso" : "Pagamento não concluído", chaveLiberacao);
         }
@@ -189,15 +194,16 @@ public class EstoqueService {
     }
 
     private void movimentar(EstoqueCondominio estoque, BigDecimal delta, TipoMovimentacaoEstoque tipo,
-                            Order order, Item item, String motivo, String chave) {
+                            Order order, OrderItem item, String motivo, String chave) {
         BigDecimal anterior = estoque.getQuantidade();
         BigDecimal posterior = anterior.add(delta);
         estoque.setQuantidade(posterior);
         estoqueRepository.save(estoque);
         MovimentacaoEstoque movimento = new MovimentacaoEstoque();
         movimento.setEstoque(estoque);
+        movimento.setEmpresa(estoque.getEmpresa());
         movimento.setTipo(tipo);
-        movimento.setQuantidade(delta.abs());
+        movimento.setQuantidade(delta);
         movimento.setQuantidadeAnterior(anterior);
         movimento.setQuantidadePosterior(posterior);
         movimento.setOrder(order);
@@ -211,7 +217,7 @@ public class EstoqueService {
         }
     }
 
-    private String chave(Order order, Item item, String fase) {
+    private String chave(Order order, OrderItem item, String fase) {
         return order.getIdOrder() + ":" + item.getIdItem() + ":" + fase;
     }
 

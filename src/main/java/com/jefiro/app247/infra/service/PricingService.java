@@ -11,7 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Comparator;
 
 @Service
@@ -19,7 +19,7 @@ public class PricingService {
     @Autowired private PromocaoRepository promocaoRepository;
     @Autowired private EstoqueCondominioRepository estoqueRepository;
 
-    public PrecoCalculado calcular(Produto produto, Condominio condominio, LocalDateTime agoraUtc) {
+    public PrecoCalculado calcular(Produto produto, Condominio condominio, Instant agoraUtc) {
         validarDisponibilidade(produto, condominio);
         BigDecimal original = MoneyPolicy.persistence(produto.getPreco());
 

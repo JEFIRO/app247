@@ -1,121 +1,87 @@
 package com.jefiro.app247.domain.model;
 
 import com.jefiro.app247.domain.model.auth.User;
-import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
 import com.jefiro.app247.domain.model.enum_type.OriginRequest;
+import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
 import com.jefiro.app247.domain.model.enum_type.order.StatusDetail;
+import com.jefiro.app247.domain.model.terminal.Terminal;
+import com.jefiro.app247.infra.service.MoneyPolicy;
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
 @Getter
 @Setter
-@AllArgsConstructor
 @NoArgsConstructor
 @Entity
 @Table(name = "orders")
-@ToString
 public class Order {
-
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(length = 36)
+    @Column(name = "id", columnDefinition = "char(36)", length = 36, nullable = false)
     private String idOrder;
-    @ManyToOne
-    @JoinColumn(name = "empresa_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "empresa_id", nullable = false)
     private Empresa empresa;
-    @OneToOne
-    @JoinColumn(name = "id_carrinho", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "condominio_id", nullable = false)
+    private Condominio condominio;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "terminal_id", nullable = false)
+    private Terminal terminal;
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "carrinho_id", nullable = false, unique = true)
     private Carrinho carrinho;
-    @ManyToOne
-    @JoinColumn(name = "id_user")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
     private User user;
-
-    @Column(length = 36)
-    private String idTerminal;
-
-    @Column(precision = 15, scale = 6)
+    @OneToMany(mappedBy = "order", fetch = FetchType.LAZY, cascade = CascadeType.PERSIST)
+    @OrderBy("createdAt ASC")
+    private List<OrderItem> items = new ArrayList<>();
+    @OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
+    @OrderBy("attemptNumber ASC")
+    private List<PaymentAttempt> paymentAttempts = new ArrayList<>();
+    @Column(nullable = false, precision = 15, scale = 6)
     private BigDecimal subtotal;
-
-    @Column(precision = 15, scale = 6)
+    @Column(nullable = false, precision = 15, scale = 6)
     private BigDecimal desconto;
-
-    @Column(precision = 15, scale = 6)
-    private BigDecimal total;
-
-    @Column(name = "total_calculado", precision = 15, scale = 6)
+    @Column(name = "total_calculado", nullable = false, precision = 15, scale = 6)
     private BigDecimal totalCalculado;
-
-    @Column(name = "total_cobrado", precision = 15, scale = 6)
+    @Column(name = "total_cobrado", nullable = false, precision = 15, scale = 6)
     private BigDecimal totalCobrado;
-
     @Enumerated(EnumType.STRING)
+    @Column(name = "origin_request", nullable = false, length = 30)
     private OriginRequest originRequest;
-
     @Enumerated(EnumType.STRING)
-    private OrderStatus status;
-
+    @Column(nullable = false, length = 30)
+    private OrderStatus status = OrderStatus.PENDING;
+    @Version
     @Column(nullable = false)
-    private LocalDateTime createdAt;
+    private Long version = 0L;
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt;
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+    @Column(name = "paid_at")
+    private Instant paidAt;
+    @Transient
+    private String detachedTerminalId;
 
-    private LocalDateTime updatedAt;
-
-    private LocalDateTime paidAt;
-
-    @OneToOne(cascade = CascadeType.ALL)
-    @JoinColumn(name = "id_pagamento")
-    private Pagamento pagamento;
-
-    @Column(name = "mp_order_id")
-    private String mpOrderId;
-
-    @Column(name = "mp_type")
-    private String mpType;
-
-    @Column(name = "mp_user_id")
-    private String mpUserId;
-
-    @Column(name = "mp_status")
-    @Enumerated(EnumType.STRING)
-    private OrderStatus mpStatus;
-
-    @Column(name = "mp_status_detail")
-    @Enumerated(EnumType.STRING)
-    private StatusDetail mpStatusDetail;
-
-    @Column(name = "mp_terminal_id")
-    private String mpTerminalId;
-
-    @Column(name = "mp_event_version")
-    private Integer mpEventVersion;
-
-    @Column(name = "mp_event_date")
-    private LocalDateTime mpEventDate;
-
-
-    @PrePersist
-    public void prePersist() {
-        createdAt = LocalDateTime.now();
-        if (status == null) {
-            status = OrderStatus.PENDING;
-        }
-
-        if (subtotal == null && carrinho != null) {
-            subtotal = carrinho.getSubtotal();
-        }
-
-        if (total == null) {
-            total = subtotal;
-        }
-        if (totalCalculado == null) totalCalculado = total;
-        if (totalCobrado == null) totalCobrado = total;
-    }
-
-    @PreUpdate
-    public void preUpdate() {
-        updatedAt = LocalDateTime.now();
+    public Order(Carrinho carrinho) {
+        this.carrinho = carrinho;
+        empresa = carrinho.getEmpresa();
+        condominio = carrinho.getCondominio();
+        terminal = carrinho.getTerminal();
+        originRequest = OriginRequest.TERMINAL;
+        atualizarTotaisDoCarrinho();
+        snapshotItens();
     }
 
     public Order(Carrinho carrinho, User user) {
@@ -123,24 +89,133 @@ public class Order {
         this.user = user;
     }
 
-    public Order(Carrinho carrinho) {
-        this.carrinho = carrinho;
-        this.empresa = carrinho.getEmpresa();
-        atualizarTotaisDoCarrinho();
-        this.idTerminal = carrinho.getIdTerminal();
-        this.setOriginRequest(OriginRequest.TERMINAL);
+    public void snapshotItens() {
+        if (carrinho == null || carrinho.getItems() == null || !items.isEmpty()) return;
+        for (CartItem item : carrinho.getItems()) items.add(OrderItem.snapshot(this, item));
     }
 
     public void atualizarTotaisDoCarrinho() {
-        this.subtotal = carrinho.getItems().stream()
-                .map(item -> item.getOriginalPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        this.subtotal = com.jefiro.app247.infra.service.MoneyPolicy.persistence(subtotal);
-        this.totalCalculado = carrinho.getSubtotal();
-        this.totalCobrado = com.jefiro.app247.infra.service.MoneyPolicy
-                .chargedForPersistence(totalCalculado);
-        this.desconto = com.jefiro.app247.infra.service.MoneyPolicy.persistence(
-                subtotal.subtract(totalCalculado));
-        this.total = totalCobrado;
+        if (carrinho == null) return;
+        subtotal = MoneyPolicy.persistence(carrinho.getItems().stream().map(i -> i.getOriginalPrice().multiply(i.getQuantity())).reduce(BigDecimal.ZERO, BigDecimal::add));
+        totalCalculado = MoneyPolicy.persistence(carrinho.getSubtotal());
+        totalCobrado = MoneyPolicy.chargedForPersistence(totalCalculado);
+        desconto = MoneyPolicy.persistence(subtotal.subtract(totalCalculado));
+    }
+
+    public BigDecimal getTotal() {
+        return totalCobrado;
+    }
+
+    public void setTotal(BigDecimal total) {
+        this.totalCobrado = total;
+    }
+
+    public String getIdTerminal() {
+        return terminal != null ? terminal.getIdTerminal() : detachedTerminalId;
+    }
+
+    public void setIdTerminal(String value) {
+        detachedTerminalId = value;
+    }
+
+    public PaymentAttempt getPagamento() {
+        return paymentAttempts == null ? null : paymentAttempts.stream().max(Comparator.comparing(PaymentAttempt::getAttemptNumber, Comparator.nullsFirst(Integer::compareTo))).orElse(null);
+    }
+
+    public void setPagamento(PaymentAttempt attempt) {
+        if (attempt == null) return;
+        if (paymentAttempts == null) paymentAttempts = new ArrayList<>();
+        attempt.setOrder(this);
+        if (attempt.getEmpresa() == null) attempt.setEmpresa(empresa);
+        if (!paymentAttempts.contains(attempt)) paymentAttempts.add(attempt);
+    }
+
+    public String getMpOrderId() {
+        PaymentAttempt p = getPagamento();
+        return p != null ? p.getProviderOrderId() : null;
+    }
+
+    public void setMpOrderId(String value) {
+        requireAttempt().setProviderOrderId(value);
+    }
+
+    public String getMpType() {
+        return "point";
+    }
+
+    public void setMpType(String ignored) {
+    }
+
+    public String getMpUserId() {
+        PaymentAttempt p = getPagamento();
+        return p != null ? p.getProviderUserId() : null;
+    }
+
+    public void setMpUserId(String value) {
+        requireAttempt().setProviderUserId(value);
+    }
+
+    public OrderStatus getMpStatus() {
+        return status;
+    }
+
+    public void setMpStatus(OrderStatus value) {
+        status = value;
+    }
+
+    public StatusDetail getMpStatusDetail() {
+        PaymentAttempt p = getPagamento();
+        return p == null ? null : StatusDetail.findByValue(p.getStatusDetail());
+    }
+
+    public void setMpStatusDetail(StatusDetail value) {
+        requireAttempt().setStatusDetail(value != null ? value.getValue() : null);
+    }
+
+    public String getMpTerminalId() {
+        PaymentAttempt p = getPagamento();
+        return p != null ? p.getProviderTerminalId() : null;
+    }
+
+    public void setMpTerminalId(String value) {
+        requireAttempt().setProviderTerminalId(value);
+    }
+
+    public Integer getMpEventVersion() {
+        PaymentAttempt p = getPagamento();
+        return p != null ? p.getProviderEventVersion() : null;
+    }
+
+    public void setMpEventVersion(Integer value) {
+        requireAttempt().setProviderEventVersion(value);
+    }
+
+    public Instant getMpEventDate() {
+        PaymentAttempt p = getPagamento();
+        return p == null ? null : p.getProviderEventAt();
+    }
+
+    public void setMpEventDate(Instant value) {
+        requireAttempt().setProviderEventAt(value);
+    }
+
+    private PaymentAttempt requireAttempt() {
+        PaymentAttempt p = getPagamento();
+        if (p == null) throw new IllegalStateException("Order sem tentativa de pagamento");
+        return p;
+    }
+
+    @PrePersist
+    void prePersist() {
+        Instant now = Instant.now();
+        if (createdAt == null) createdAt = now;
+        updatedAt = now;
+        if (status == null) status = OrderStatus.PENDING;
+        snapshotItens();
+    }
+
+    @PreUpdate
+    void preUpdate() {
+        updatedAt = Instant.now();
     }
 }

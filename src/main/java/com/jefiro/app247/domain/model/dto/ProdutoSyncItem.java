@@ -6,11 +6,13 @@ import com.jefiro.app247.domain.model.enum_type.UnidadeMedida;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.util.List;
 
 public record ProdutoSyncItem(
         String id,
         String codigo,
+        String codigoInterno,
+        List<ProdutoCodigoBarrasDTO> codigosBarras,
         String nome,
         String descricao,
         BigDecimal precoOriginal,
@@ -32,6 +34,10 @@ public record ProdutoSyncItem(
         this(
                 estoque.getProduto().getIdProduto(),
                 estoque.getProduto().getCodigo(),
+                estoque.getProduto().getCodigoInterno(),
+                estoque.getProduto().getCodigosBarras().stream()
+                        .filter(c -> Boolean.TRUE.equals(c.getAtivo()))
+                        .map(ProdutoCodigoBarrasDTO::new).toList(),
                 estoque.getProduto().getNome(),
                 estoque.getProduto().getDescricao(),
                 precoCalculado.precoOriginal(),
@@ -46,12 +52,12 @@ public record ProdutoSyncItem(
                 estoque.getProduto().getFoto(),
                 Boolean.TRUE.equals(estoque.getAtivo()) && estoque.getProduto().isStatus(),
                 estoque.getQuantidade(),
-                estoque.getProduto().getCreateAt().toInstant(ZoneOffset.UTC),
-                maisRecente(estoque).toInstant(ZoneOffset.UTC)
+                estoque.getProduto().getCreateAt(),
+                maisRecente(estoque)
         );
     }
 
-    private static java.time.LocalDateTime maisRecente(EstoqueCondominio estoque) {
+    private static Instant maisRecente(EstoqueCondominio estoque) {
         var produtoUpdatedAt = estoque.getProduto().getUpdateAt();
         var estoqueUpdatedAt = estoque.getUpdatedAt();
         return produtoUpdatedAt.isAfter(estoqueUpdatedAt) ? produtoUpdatedAt : estoqueUpdatedAt;

@@ -2,7 +2,6 @@ package com.jefiro.app247.infra.service;
 
 import com.jefiro.app247.domain.model.MercadoPagoConta;
 import com.jefiro.app247.domain.model.dto.OrderResponse;
-import com.jefiro.app247.infra.repository.OauthMercadoPagoRepository;
 import com.jefiro.app247.infra.exception.ExternalServiceException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -17,16 +16,13 @@ public class MercadoPagoOrderQueryService {
 
     private static final String ORDERS_URL = "https://api.mercadopago.com/v1/orders/";
 
-    private final OauthMercadoPagoRepository contaRepository;
     private final RestTemplate restTemplate;
     @Autowired
     private OauthMercadoPagoService oauthMercadoPagoService;
 
     public MercadoPagoOrderQueryService(
-            OauthMercadoPagoRepository contaRepository,
             RestTemplate restTemplate
     ) {
-        this.contaRepository = contaRepository;
         this.restTemplate = restTemplate;
     }
 
@@ -38,10 +34,7 @@ public class MercadoPagoOrderQueryService {
             throw new IllegalArgumentException("Webhook resumido sem data.id");
         }
 
-        MercadoPagoConta conta = contaRepository.findByMpUserId(mercadoPagoUserId)
-                .orElseThrow(() -> new IllegalStateException(
-                        "Conta Mercado Pago não encontrada para user_id=" + mercadoPagoUserId
-                ));
+        MercadoPagoConta conta = oauthMercadoPagoService.getByMpUserId(mercadoPagoUserId);
 
         return getOrder(conta, mercadoPagoOrderId);
     }

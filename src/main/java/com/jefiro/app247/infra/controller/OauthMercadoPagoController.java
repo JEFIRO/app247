@@ -3,6 +3,7 @@ package com.jefiro.app247.infra.controller;
 import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.infra.dto.mercadopago.MercadoPagoTerminalResponse;
 import com.jefiro.app247.infra.dto.mercadopago.MercadoPagoSetupStatusResponse;
+import com.jefiro.app247.infra.dto.mercadopago.MercadoPagoOauthResultResponse;
 import com.jefiro.app247.infra.service.MercadoPagoTerminalService;
 import com.jefiro.app247.infra.service.MercadoPagoSetupStatusService;
 import com.jefiro.app247.infra.service.OauthMercadoPagoService;
@@ -29,8 +30,9 @@ public class OauthMercadoPagoController {
     }
 
     @GetMapping("/mercado-pago/oauth")
-    public void conectar(HttpServletResponse response, @AuthenticationPrincipal User gestor) throws IOException {
-        response.sendRedirect(oauthService.url(gestor));
+    public void conectar(HttpServletResponse response, @AuthenticationPrincipal User gestor,
+                         @RequestParam(defaultValue = "false") boolean replace) throws IOException {
+        response.sendRedirect(oauthService.url(gestor, replace));
     }
 
     @Deprecated
@@ -44,6 +46,18 @@ public class OauthMercadoPagoController {
     public ResponseEntity<Void> callback(@RequestParam String code, @RequestParam String state) {
         oauthService.gerarToken(code, state);
         return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/mercado-pago/conta")
+    public ResponseEntity<Void> desvincularConta() {
+        oauthService.desvincularContaAtual();
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/mercado-pago/oauth/result")
+    public ResponseEntity<MercadoPagoOauthResultResponse> consultarResultadoOauth() {
+        MercadoPagoOauthResultResponse result = oauthService.consultarResultado();
+        return result == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(result);
     }
 
     @GetMapping("/mercado-pago/terminais")

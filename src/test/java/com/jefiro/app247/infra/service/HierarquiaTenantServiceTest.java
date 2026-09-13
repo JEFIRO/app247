@@ -6,6 +6,7 @@ import com.jefiro.app247.domain.model.dto.CondominioRequest;
 import com.jefiro.app247.domain.model.dto.TerminalRequest;
 import com.jefiro.app247.domain.model.terminal.Terminal;
 import com.jefiro.app247.infra.repository.CondominioRepository;
+import com.jefiro.app247.infra.repository.EnderecoRepository;
 import com.jefiro.app247.infra.repository.TerminalRepository;
 import jakarta.persistence.JoinColumn;
 import org.junit.jupiter.api.AfterEach;
@@ -26,6 +27,7 @@ class HierarquiaTenantServiceTest {
     @Mock CondominioRepository condominioRepository;
     @Mock TerminalRepository terminalRepository;
     @Mock EmpresaService empresaService;
+    @Mock EnderecoRepository enderecoRepository;
 
     @AfterEach
     void limparTenant() {
@@ -38,7 +40,8 @@ class HierarquiaTenantServiceTest {
         EmpresaContext.set("empresa-a");
         when(empresaService.getEmpresa("empresa-a")).thenReturn(empresa);
         when(condominioRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        CondominioService service = new CondominioService(condominioRepository, empresaService);
+        CondominioService service = new CondominioService(
+                condominioRepository, empresaService, enderecoRepository);
 
         service.criar(new CondominioRequest("Alpha", null, null));
         service.criar(new CondominioRequest("Beta", null, null));
@@ -68,7 +71,8 @@ class HierarquiaTenantServiceTest {
     @Test
     void bloqueiaCondominioETerminalDeOutraEmpresaPelaConsultaComposta() {
         EmpresaContext.set("empresa-a");
-        CondominioService condominios = new CondominioService(condominioRepository, empresaService);
+        CondominioService condominios = new CondominioService(
+                condominioRepository, empresaService, enderecoRepository);
         when(condominioRepository.findByIdCondominioAndEmpresaId("condominio-b", "empresa-a"))
                 .thenReturn(Optional.empty());
         assertThrows(ResponseStatusException.class, () -> condominios.buscar("condominio-b"));

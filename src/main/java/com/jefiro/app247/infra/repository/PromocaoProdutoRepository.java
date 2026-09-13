@@ -5,7 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 public interface PromocaoProdutoRepository extends JpaRepository<PromocaoProduto, String> {
@@ -19,6 +19,6 @@ public interface PromocaoProdutoRepository extends JpaRepository<PromocaoProduto
     List<String> findProductIdsWithTemporalTransition(
             @Param("empresaId") String empresaId,
             @Param("condominioId") String condominioId,
-            @Param("lastSync") LocalDateTime lastSync,
-            @Param("syncAt") LocalDateTime syncAt);
+            @Param("lastSync") Instant lastSync,
+            @Param("syncAt") Instant syncAt);
 }

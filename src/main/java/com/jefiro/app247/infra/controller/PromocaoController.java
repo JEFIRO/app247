@@ -10,8 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.Instant;
 import java.util.List;
 
 @RestController
@@ -60,6 +59,6 @@ public class PromocaoController {
         var produto = produtoService.buscarPorIdDoTenant(produtoId, empresaId);
         var condominio = condominioService.buscarDoTenant(condominioId, empresaId);
         return PrecoProdutoResponse.from(pricingService.calcular(
-                produto, condominio, LocalDateTime.now(ZoneOffset.UTC)));
+                produto, condominio, Instant.now()));
     }
 }

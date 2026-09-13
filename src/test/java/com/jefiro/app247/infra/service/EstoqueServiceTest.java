@@ -32,6 +32,7 @@ class EstoqueServiceTest {
     @Mock ProdutoService produtoService;
     @Mock TerminalService terminalService;
     @Mock ApplicationEventPublisher eventPublisher;
+    @Mock AuditLogService auditLogService;
     @InjectMocks EstoqueService service;
 
     @AfterEach
@@ -155,17 +156,29 @@ class EstoqueServiceTest {
         Produto produto = new Produto();
         produto.setIdProduto("prod-a");
         produto.setEmpresa(empresa);
-        Item item = new Item();
+        CartItem item = new CartItem();
         item.setIdItem("item-a");
         item.setProduto(produto);
-        item.setQuantity(1);
+        item.setQuantity(new BigDecimal("1.000"));
+        item.setName("Produto");
+        item.setUnitPrice(new BigDecimal("1.000000"));
+        item.setOriginalPrice(new BigDecimal("1.000000"));
+        item.setCalculatedDiscount(BigDecimal.ZERO.setScale(6));
+        item.setCalculatedSubtotal(new BigDecimal("1.000000"));
+        item.setUnidadeMedida(com.jefiro.app247.domain.model.enum_type.UnidadeMedida.UN);
         Carrinho carrinho = new Carrinho();
         carrinho.setTerminal(terminal);
         carrinho.setItems(List.of(item));
         item.setCarrinho(carrinho);
         Order order = new Order();
         order.setIdOrder("order-a");
+        order.setEmpresa(empresa);
+        order.setCondominio(condominio);
+        order.setTerminal(terminal);
         order.setCarrinho(carrinho);
+        OrderItem orderItem = OrderItem.snapshot(order, item);
+        orderItem.setId("item-a");
+        order.setItems(List.of(orderItem));
         EstoqueCondominio estoque = new EstoqueCondominio();
         estoque.setCondominio(condominio);
         estoque.setProduto(produto);

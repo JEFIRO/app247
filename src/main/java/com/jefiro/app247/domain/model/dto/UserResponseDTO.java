@@ -5,7 +5,7 @@ import com.jefiro.app247.domain.model.auth.RoleUser;
 import com.jefiro.app247.domain.model.auth.User;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record UserResponseDTO(
         String userId,
@@ -19,9 +19,9 @@ public record UserResponseDTO(
         Boolean ativo,
         Boolean emailVerificado,
         RoleUser role,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt,
-        LocalDateTime ultimoLogin
+        Instant createdAt,
+        Instant updatedAt,
+        Instant ultimoLogin
 ) {
     public UserResponseDTO(User user) {
         this(user.getIdUser(),

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.jefiro.app247.domain.model.dto.TerminalStatusDTO;
 import com.jefiro.app247.domain.model.enum_type.TerminalStatus;
+import com.jefiro.app247.domain.model.enum_type.TerminalLifecycleState;
 import com.jefiro.app247.domain.model.terminal.Terminal;
 import com.jefiro.app247.infra.service.TerminalService;
 import org.junit.jupiter.api.Test;
@@ -11,7 +12,7 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
 import java.lang.reflect.Field;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -31,7 +32,8 @@ class TerminalWebSocketHandlerHeartbeatTest {
         Terminal terminal = new Terminal();
         terminal.setIdTerminal("terminal-a");
         terminal.setStatus(TerminalStatus.ONLINE);
-        terminal.setLastPing(LocalDateTime.of(2026, 8, 24, 15, 0));
+        terminal.setLifecycleState(TerminalLifecycleState.ACTIVE);
+        terminal.setLastPing(Instant.parse("2026-08-24T15:00:00Z"));
         when(service.updateStatus(any(TerminalStatusDTO.class))).thenReturn(terminal);
 
         WebSocketSession session = mock(WebSocketSession.class);
@@ -43,7 +45,7 @@ class TerminalWebSocketHandlerHeartbeatTest {
         assertThat(message.getValue().getPayload()).contains(
                 "\"type\":\"HEARTBEAT_ACK\"",
                 "\"terminalId\":\"terminal-a\"",
-                "\"lastPing\":\"2026-08-24T15:00\"");
+                "\"lastPing\":\"2026-08-24T15:00:00Z\"");
     }
 
     private static void inject(Object target, String fieldName, Object value) throws Exception {

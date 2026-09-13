@@ -4,11 +4,12 @@ import com.jefiro.app247.domain.model.MercadoPagoConta;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
+import java.util.List;
+import com.jefiro.app247.domain.model.enum_type.MercadoPagoAccountBindingStatus;
 
 public interface OauthMercadoPagoRepository extends JpaRepository<MercadoPagoConta,String> {
-    Optional<MercadoPagoConta> findByMpUserId(String mpUserId);
-
-    Optional<MercadoPagoConta> findByEmpresaId(String empresaId);
-
-    boolean existsByEmpresaId(String empresaId);
+    Optional<MercadoPagoConta> findFirstByEmpresaIdOrderByLinkedAtDesc(String empresaId);
+    List<MercadoPagoConta> findAllByEmpresaIdOrderByLinkedAtAsc(String empresaId);
+    Optional<MercadoPagoConta> findFirstByEmpresaIdAndStatusOrderByLinkedAtDesc(
+            String empresaId, MercadoPagoAccountBindingStatus status);
 }

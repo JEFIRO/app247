@@ -12,8 +12,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.Instant;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,10 +36,10 @@ class ProdutoCatalogRepositoryTest {
         EstoqueCondominio estoqueB = estoque(condB, produto);
         entityManager.flush();
 
-        LocalDateTime antesDaAtualizacao = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(1);
+        Instant antesDaAtualizacao = Instant.now().minusSeconds(1);
         produto.setPreco(BigDecimal.valueOf(8));
         entityManager.flush();
-        LocalDateTime depoisDaAtualizacao = LocalDateTime.now(ZoneOffset.UTC).plusSeconds(1);
+        Instant depoisDaAtualizacao = Instant.now().plusSeconds(1);
 
         assertThat(estoqueRepository.findActiveCondominiumIdsByProductId(produto.getIdProduto()))
                 .containsExactlyInAnyOrder(condA.getIdCondominio(), condB.getIdCondominio());
@@ -54,13 +53,13 @@ class ProdutoCatalogRepositoryTest {
                 .containsExactly(terminalA.getIdTerminal())
                 .doesNotContain(terminalB.getIdTerminal());
 
-        LocalDateTime antesDaRemocao = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(1);
+        Instant antesDaRemocao = Instant.now().minusSeconds(1);
         estoqueA.alterarDisponibilidade(false);
         entityManager.flush();
 
         assertThat(estoqueRepository.findCurrentCatalog(condA.getIdCondominio())).isEmpty();
         assertThat(estoqueRepository.findCatalogChanges(
-                condA.getIdCondominio(), antesDaRemocao, LocalDateTime.now(ZoneOffset.UTC).plusSeconds(1)))
+                condA.getIdCondominio(), antesDaRemocao, Instant.now().plusSeconds(1)))
                 .singleElement().satisfies(e -> assertThat(e.getAtivo()).isFalse());
         assertThat(estoqueB.getAtivo()).isTrue();
     }
@@ -71,7 +70,7 @@ class ProdutoCatalogRepositoryTest {
         Condominio condominio = condominio("A", empresa);
         Produto produto = produto(empresa);
         entityManager.flush();
-        LocalDateTime cursor = LocalDateTime.now(ZoneOffset.UTC);
+        Instant cursor = Instant.now();
 
         EstoqueCondominio estoque = estoque(condominio, produto);
         entityManager.flush();
@@ -80,7 +79,7 @@ class ProdutoCatalogRepositoryTest {
         assertThat(estoque.getUpdatedAt()).isAfter(cursor);
         assertThat(estoqueRepository.findCatalogChanges(
                 condominio.getIdCondominio(), cursor,
-                LocalDateTime.now(ZoneOffset.UTC).plusSeconds(1)))
+                Instant.now().plusSeconds(1)))
                 .extracting(e -> e.getProduto().getIdProduto())
                 .containsExactly(produto.getIdProduto());
         assertThat(estoqueRepository.findCurrentCatalog(condominio.getIdCondominio()))
@@ -111,6 +110,7 @@ class ProdutoCatalogRepositoryTest {
     private Terminal terminal(String nome, Condominio condominio) {
         Terminal terminal = new Terminal();
         terminal.setNome(nome);
+        terminal.setCodigo("TERM-" + nome);
         terminal.setCondominio(condominio);
         terminal.setAtivo(true);
         entityManager.persist(terminal);
@@ -123,6 +123,8 @@ class ProdutoCatalogRepositoryTest {
         produto.setCodigo("789");
         produto.setNome("Leite");
         produto.setPreco(BigDecimal.valueOf(7));
+        produto.setCategoria(com.jefiro.app247.domain.model.enum_type.ProdutoCategoria.OUTROS);
+        produto.setUnidadeMedida(com.jefiro.app247.domain.model.enum_type.UnidadeMedida.UN);
         produto.setStatus(true);
         entityManager.persist(produto);
         return produto;

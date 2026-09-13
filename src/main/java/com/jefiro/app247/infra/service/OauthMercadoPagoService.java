@@ -6,6 +6,9 @@ import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.dto.MercadoPagoTokenResponse;
 import com.jefiro.app247.infra.repository.OauthMercadoPagoRepository;
 import com.jefiro.app247.infra.exception.ExternalServiceException;
+import com.jefiro.app247.infra.exception.ApiBusinessException;
+import com.jefiro.app247.infra.dto.mercadopago.MercadoPagoOauthResultResponse;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.*;
@@ -17,12 +20,13 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.client.RestClientException;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 @Service
 public class OauthMercadoPagoService {
     private static final String STATE_PREFIX = "oauth:mp:";
+    private static final String RESULT_PREFIX = "oauth:mp:result:";
 
     @Value("${spring.mp.id}")
     private String clientId;
@@ -35,6 +39,8 @@ public class OauthMercadoPagoService {
     private final UserService userService;
     private final OauthMercadoPagoRepository repository;
     private final RestTemplate restTemplate;
+    @org.springframework.beans.factory.annotation.Autowired
+    private MercadoPagoAccountLifecycleService accountLifecycleService;
 
     public OauthMercadoPagoService(RedisTemplate<String, String> redisTemplate,
                                    UserService userService,
@@ -47,21 +53,28 @@ public class OauthMercadoPagoService {
     }
 
     public MercadoPagoConta getByEmpresa(String empresaId) {
-        MercadoPagoConta conta = repository.findByEmpresaId(empresaId)
-                .orElseThrow(() -> new IllegalStateException("Empresa não possui conta Mercado Pago autorizada"));
-        if (conta.getDataExpiracao() != null && !conta.getDataExpiracao().isAfter(LocalDateTime.now())) {
-            throw new IllegalStateException(
-                    "Autorização Mercado Pago expirada; realize uma nova autorização OAuth");
-        }
-        return conta;
+        return accountLifecycleService.getAtivaPorEmpresa(empresaId);
+    }
+
+    public MercadoPagoConta getByMpUserId(String mpUserId) {
+        return accountLifecycleService.getAtivaPorMpUserId(mpUserId);
+    }
+
+    public void desvincularContaAtual() {
+        accountLifecycleService.desvincular(EmpresaContext.require());
     }
 
     public String url(User gestor) {
+        return url(gestor, false);
+    }
+
+    public String url(User gestor, boolean substituirConta) {
         validarGestorDoContexto(gestor);
+        redisTemplate.delete(RESULT_PREFIX + gestor.getEmpresa().getId());
         String state = UUID.randomUUID().toString();
         redisTemplate.opsForValue().set(
                 STATE_PREFIX + state,
-                gestor.getIdUser() + "|" + gestor.getEmpresa().getId(),
+                gestor.getIdUser() + "|" + gestor.getEmpresa().getId() + "|" + substituirConta,
                 Duration.ofMinutes(10)
         );
 
@@ -73,7 +86,6 @@ public class OauthMercadoPagoService {
                 + "&redirect_uri=" + redirectUri;
     }
 
-    @Transactional
     public void gerarToken(String code, String state) {
         String key = STATE_PREFIX + state;
         String stateValue = redisTemplate.opsForValue().get(key);
@@ -81,23 +93,65 @@ public class OauthMercadoPagoService {
             throw new IllegalStateException("State inválido ou expirado");
         }
 
-        String[] partes = stateValue.split("\\|", 2);
-        if (partes.length != 2) {
+        String[] partes = stateValue.split("\\|", 3);
+        if (partes.length < 2) {
             throw new IllegalStateException("State OAuth inválido");
         }
         String userId = partes[0];
         String empresaId = partes[1];
+        boolean substituirConta = partes.length == 3 && Boolean.parseBoolean(partes[2]);
         User gestor = userService.getUser(userId);
         if (gestor.getEmpresa() == null || !empresaId.equals(gestor.getEmpresa().getId()) || !isGestor(gestor)) {
             throw new IllegalStateException("Gestor não pode autorizar Mercado Pago para esta empresa");
         }
 
-        MercadoPagoTokenResponse token = trocarCodigo(code);
-        MercadoPagoConta conta = repository.findByEmpresaId(empresaId).orElseGet(MercadoPagoConta::new);
-        conta.atualizarCredenciais(token);
-        conta.setEmpresa(gestor.getEmpresa());
-        repository.save(conta);
-        redisTemplate.delete(key);
+        try {
+            MercadoPagoTokenResponse token = trocarCodigo(code);
+            try {
+                accountLifecycleService.autorizar(empresaId, token, substituirConta);
+            } catch (DataIntegrityViolationException conflict) {
+                accountLifecycleService.reautorizarAposConflito(empresaId, token);
+            }
+        } catch (ApiBusinessException business) {
+            if ("MERCADO_PAGO_ACCOUNT_ALREADY_LINKED".equals(business.getCode())) {
+                accountLifecycleService.registrarConflito(empresaId);
+            }
+            registrarResultado(empresaId, business.getCode());
+            throw business;
+        } catch (RuntimeException failure) {
+            registrarResultado(empresaId, "MERCADO_PAGO_OAUTH_FAILED");
+            throw failure;
+        } finally {
+            redisTemplate.delete(key);
+        }
+    }
+
+    public MercadoPagoOauthResultResponse consultarResultado() {
+        String empresaId = EmpresaContext.require();
+        String key = RESULT_PREFIX + empresaId;
+        String code = redisTemplate.opsForValue().get(key);
+        if (code == null) {
+            return null;
+        }
+        return new MercadoPagoOauthResultResponse(code, mensagemSegura(code));
+    }
+
+    private void registrarResultado(String empresaId, String code) {
+        redisTemplate.opsForValue().set(
+                RESULT_PREFIX + empresaId,
+                code,
+                Duration.ofMinutes(10)
+        );
+    }
+
+    private String mensagemSegura(String code) {
+        return switch (code) {
+            case "MERCADO_PAGO_ACCOUNT_ALREADY_LINKED" ->
+                    "Esta conta Mercado Pago já está vinculada a outra empresa no sistema.";
+            case "MERCADO_PAGO_ACCOUNT_REPLACEMENT_REQUIRED" ->
+                    "Esta Empresa já possui outra conta Mercado Pago. Confirme a substituição para continuar.";
+            default -> "Não foi possível concluir a autorização do Mercado Pago.";
+        };
     }
 
     private MercadoPagoTokenResponse trocarCodigo(String code) {

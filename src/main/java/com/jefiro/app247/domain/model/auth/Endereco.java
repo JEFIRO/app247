@@ -3,41 +3,63 @@ package com.jefiro.app247.domain.model.auth;
 import com.jefiro.app247.domain.model.Empresa;
 import com.jefiro.app247.domain.model.dto.EnderecoDTO;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-@Data
-@AllArgsConstructor
+import java.time.Instant;
+
+@Getter
+@Setter
 @NoArgsConstructor
-
-@Entity(name = "endereco")
+@Entity
 @Table(name = "endereco")
 public class Endereco {
-
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(length = 36)
+    @Column(name = "id", columnDefinition = "char(36)", length = 36, nullable = false)
     private String idEndereco;
-
-    private String rua;
-    private String numero;
-    private String complemento;
-    private String bairro;
-    private String cidade;
-    private String estado;
-    private String cep;
-    @ManyToOne
-    @JoinColumn(name = "empresa_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "empresa_id", nullable = false)
     private Empresa empresa;
+    @Column(nullable = false, length = 180)
+    private String rua;
+    @Column(nullable = false, length = 20)
+    private String numero;
+    @Column(length = 100)
+    private String complemento;
+    @Column(nullable = false, length = 100)
+    private String bairro;
+    @Column(nullable = false, length = 100)
+    private String cidade;
+    @Column(nullable = false, length = 2)
+    private String estado;
+    @Column(nullable = false, length = 9)
+    private String cep;
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt;
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 
-    public Endereco(EnderecoDTO enderecoDTO) {
-        this.rua = enderecoDTO.rua();
-        this.numero = enderecoDTO.numero();
-        this.complemento = enderecoDTO.complemento();
-        this.bairro = enderecoDTO.bairro();
-        this.cidade = enderecoDTO.cidade();
-        this.estado = enderecoDTO.estado();
-        this.cep = enderecoDTO.cep();
+    public Endereco(EnderecoDTO dto) {
+        rua = dto.rua();
+        numero = dto.numero();
+        complemento = dto.complemento();
+        bairro = dto.bairro();
+        cidade = dto.cidade();
+        estado = dto.estado();
+        cep = dto.cep();
+    }
+
+    @PrePersist
+    void prePersist() {
+        Instant now = Instant.now();
+        if (createdAt == null) createdAt = now;
+        updatedAt = now;
+    }
+
+    @PreUpdate
+    void preUpdate() {
+        updatedAt = Instant.now();
     }
 }

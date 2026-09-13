@@ -7,8 +7,6 @@ import com.jefiro.app247.domain.model.enum_type.TipoPromocao;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 
 public record PromocaoResponse(
@@ -29,21 +27,21 @@ public record PromocaoResponse(
         Instant createdAt,
         Instant updatedAt
 ) {
-    public static PromocaoResponse from(Promocao promocao, LocalDateTime agora) {
+    public static PromocaoResponse from(Promocao promocao, Instant agora) {
         return new PromocaoResponse(
                 promocao.getIdPromocao(), promocao.getNome(), promocao.getDescricao(),
                 promocao.getAbrangencia(),
                 promocao.getCondominio() != null ? promocao.getCondominio().getIdCondominio() : null,
                 promocao.getCondominio() != null ? promocao.getCondominio().getNome() : null,
                 promocao.getTipo(), promocao.getValor(),
-                promocao.getInicio().toInstant(ZoneOffset.UTC),
-                promocao.getFim().toInstant(ZoneOffset.UTC),
+                promocao.getInicio(),
+                promocao.getFim(),
                 promocao.isAtivo(), promocao.statusEm(agora), promocao.getPrioridade(),
                 promocao.produtosAssociados().stream()
                         .map(p -> new ProdutoResumo(p.getIdProduto(), p.getCodigo(), p.getNome(), p.getPreco()))
                         .toList(),
-                promocao.getCreatedAt().toInstant(ZoneOffset.UTC),
-                promocao.getUpdatedAt().toInstant(ZoneOffset.UTC));
+                promocao.getCreatedAt(),
+                promocao.getUpdatedAt());
     }
 
     public record ProdutoResumo(String id, String codigo, String nome, BigDecimal preco) {

@@ -3,7 +3,7 @@ package com.jefiro.app247.domain.model.dto;
 import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record OrderDTO(
         String orderId,
@@ -11,6 +11,6 @@ public record OrderDTO(
         BigDecimal subtotal,
         BigDecimal desconto,
         BigDecimal total,
-        LocalDateTime createdAt
+        Instant createdAt
 ) {
 }

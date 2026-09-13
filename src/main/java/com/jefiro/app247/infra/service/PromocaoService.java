@@ -24,6 +24,7 @@ public class PromocaoService {
     @Autowired private CondominioService condominioService;
     @Autowired private EstoqueCondominioRepository estoqueRepository;
     @Autowired private ApplicationEventPublisher eventPublisher;
+    @Autowired private AuditLogService auditLogService;
 
     @Transactional
     public PromocaoResponse criar(PromocaoRequest request) {
@@ -32,6 +33,8 @@ public class PromocaoService {
         promocao.setEmpresa(empresaService.getEmpresa(empresaId));
         aplicar(promocao, request, empresaId);
         Promocao salva = promocaoRepository.saveAndFlush(promocao);
+        auditLogService.record(salva.getEmpresa(), "PROMOTION_CREATED", "Promocao", salva.getIdPromocao(),
+                null, Map.of("nome", salva.getNome(), "abrangencia", salva.getAbrangencia().name()), Map.of());
         notificar(destinos(salva), ProdutoCatalogChangeReason.PROMOTION_CREATED);
         return response(salva);
     }
@@ -43,6 +46,8 @@ public class PromocaoService {
         Map<String, Set<String>> antes = destinos(promocao);
         aplicar(promocao, request, empresaId);
         Promocao salva = promocaoRepository.saveAndFlush(promocao);
+        auditLogService.record(salva.getEmpresa(), "PROMOTION_UPDATED", "Promocao", salva.getIdPromocao(),
+                null, Map.of("nome", salva.getNome(), "abrangencia", salva.getAbrangencia().name()), Map.of());
         notificar(merge(antes, destinos(salva)), ProdutoCatalogChangeReason.PROMOTION_UPDATED);
         return response(salva);
     }
@@ -54,6 +59,8 @@ public class PromocaoService {
         if (promocao.isAtivo() == ativo) return response(promocao);
         promocao.setAtivo(ativo);
         Promocao salva = promocaoRepository.saveAndFlush(promocao);
+        auditLogService.record(salva.getEmpresa(), ativo ? "PROMOTION_ACTIVATED" : "PROMOTION_DEACTIVATED",
+                "Promocao", salva.getIdPromocao(), null, Map.of("ativo", ativo), Map.of());
         notificar(destinos(salva), ProdutoCatalogChangeReason.PROMOTION_STATUS_CHANGED);
         return response(salva);
     }
@@ -67,7 +74,7 @@ public class PromocaoService {
     public List<PromocaoResponse> listar(AbrangenciaPromocao abrangencia, StatusPromocao status,
                                           String condominioId, String produtoId) {
         String empresaId = EmpresaContext.require();
-        LocalDateTime agora = agora();
+        Instant agora = agora();
         return promocaoRepository.findDistinctByEmpresaIdOrderByCreatedAtDesc(empresaId).stream()
                 .filter(p -> abrangencia == null || p.getAbrangencia() == abrangencia)
                 .filter(p -> status == null || p.statusEm(agora) == status)
@@ -95,8 +102,8 @@ public class PromocaoService {
         promocao.setCondominio(resolverCondominio(request, empresaId));
         promocao.setTipo(request.tipo());
         promocao.setValor(MoneyPolicy.persistence(request.valor()));
-        promocao.setInicio(LocalDateTime.ofInstant(request.inicio(), ZoneOffset.UTC));
-        promocao.setFim(LocalDateTime.ofInstant(request.fim(), ZoneOffset.UTC));
+        promocao.setInicio(request.inicio());
+        promocao.setFim(request.fim());
         if (request.ativo() != null) {
             promocao.setAtivo(request.ativo());
         } else if (promocao.getIdPromocao() == null) {
@@ -199,7 +206,7 @@ public class PromocaoService {
     }
 
     private void notificar(Map<String, Set<String>> destinos, ProdutoCatalogChangeReason motivo) {
-        LocalDateTime atualizadoEm = agora();
+        Instant atualizadoEm = agora();
         destinos.forEach((produtoId, condominios) -> {
             if (!condominios.isEmpty()) {
                 estoqueRepository.touchCatalog(condominios, Set.of(produtoId), atualizadoEm);
@@ -212,7 +219,7 @@ public class PromocaoService {
         return PromocaoResponse.from(promocao, agora());
     }
 
-    private LocalDateTime agora() {
-        return LocalDateTime.now(ZoneOffset.UTC);
+    private Instant agora() {
+        return Instant.now();
     }
 }

@@ -12,14 +12,18 @@ import com.jefiro.app247.infra.repository.TerminalRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @Service
 public class TerminalService {
     private final TerminalRepository repository;
     private final CondominioService condominioService;
+    @org.springframework.beans.factory.annotation.Autowired
+    private TerminalPresenceService presenceService;
 
     public TerminalService(TerminalRepository repository, CondominioService condominioService) {
         this.repository = repository;
@@ -58,10 +62,10 @@ public class TerminalService {
         Terminal terminal = getTerminalDoTenant(terminalId);
         terminal.setNome(request.nome());
         terminal.setSerialNumber(request.serialNumber());
-        terminal.setCodigo(request.serialNumber());
+        terminal.setCodigo(request.nome());
         terminal.setMacAddress(request.macAddress());
         terminal.setIpAddress(request.ipAddress());
-        terminal.setUpdate_at(LocalDateTime.now());
+        terminal.setUpdate_at(Instant.now());
         return new TerminalResponseDTO(repository.save(terminal));
     }
 
@@ -84,9 +88,22 @@ public class TerminalService {
     public Terminal updateStatus(TerminalStatusDTO status) {
         Terminal terminal = getTerminal(status.terminalId());
         terminal.setStatus(TerminalStatus.valueOf(status.status()));
-        terminal.setUpdate_at(LocalDateTime.now());
-        terminal.setLastPing(LocalDateTime.now());
-        return repository.saveAndFlush(terminal);
+        terminal.setUpdate_at(Instant.now());
+        terminal.setLastPing(Instant.now());
+        Terminal saved = repository.saveAndFlush(terminal);
+        recordPresenceAfterCommit(saved.getIdTerminal());
+        return saved;
+    }
+
+    private void recordPresenceAfterCommit(String terminalId) {
+        if (presenceService == null) return;
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { presenceService.recordHeartbeat(terminalId); }
+            });
+        } else {
+            presenceService.recordHeartbeat(terminalId);
+        }
     }
 
     Terminal construir(TerminalRequest request, Condominio condominio) {
@@ -99,7 +116,7 @@ public class TerminalService {
     public void verificarTerminais() {
         repository.findAll().forEach(terminal -> {
             if (terminal.getLastPing() != null
-                    && terminal.getLastPing().isBefore(LocalDateTime.now().minusSeconds(60))) {
+                    && terminal.getLastPing().isBefore(Instant.now().minusSeconds(60))) {
                 terminal.setStatus(TerminalStatus.OFFLINE);
                 repository.save(terminal);
             }

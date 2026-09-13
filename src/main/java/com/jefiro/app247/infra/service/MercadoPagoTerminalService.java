@@ -13,6 +13,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.client.RestClientException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
+import com.jefiro.app247.infra.exception.ApiBusinessException;
 
 import java.util.Collections;
 import java.util.Map;
@@ -28,6 +31,8 @@ public class MercadoPagoTerminalService {
     private final TerminalService terminalService;
     private final TerminalRepository terminalRepository;
     private final RestTemplate restTemplate;
+    @Autowired
+    TerminalPointBindingService pointBindingService;
 
     public MercadoPagoTerminalService(OauthMercadoPagoService oauthService,
                                       TerminalService terminalService,
@@ -57,6 +62,9 @@ public class MercadoPagoTerminalService {
 
     @Transactional
     public TerminalResponseDTO vincular(String terminalIdInterno, String mercadoPagoTerminalId) {
+        if (mercadoPagoTerminalId == null || mercadoPagoTerminalId.isBlank()) {
+            throw new IllegalArgumentException("Informe a maquininha Mercado Pago");
+        }
         String empresaId = EmpresaContext.require();
         MercadoPagoConta conta = oauthService.getByEmpresa(empresaId);
         Terminal terminal = terminalService.getTerminalDoTenant(terminalIdInterno);
@@ -73,16 +81,19 @@ public class MercadoPagoTerminalService {
                     throw new IllegalStateException("Maquininha Mercado Pago já vinculada a outro terminal interno");
                 });
 
-        terminal.setMercadoPagoTerminalId(mercadoPagoTerminalId);
-        return new TerminalResponseDTO(terminalRepository.save(terminal));
+        try {
+            return new TerminalResponseDTO(pointBindingService.vincular(
+                    terminal, conta, mercadoPagoTerminalId));
+        } catch (DataIntegrityViolationException conflict) {
+            throw new ApiBusinessException(HttpStatus.CONFLICT, "POINT_ALREADY_LINKED",
+                    "Maquininha Mercado Pago já vinculada a outro terminal interno");
+        }
     }
 
     @Transactional
     public void desvincular(String terminalIdInterno) {
-        oauthService.getByEmpresa(EmpresaContext.require());
         Terminal terminal = terminalService.getTerminalDoTenant(terminalIdInterno);
-        terminal.setMercadoPagoTerminalId(null);
-        terminalRepository.save(terminal);
+        pointBindingService.desvincularTerminal(terminal, "USER_UNLINK");
     }
 
     private List<TerminalResponse> listarExternos(MercadoPagoConta conta) {

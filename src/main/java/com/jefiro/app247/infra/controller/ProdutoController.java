@@ -41,6 +41,12 @@ public class ProdutoController {
         return ResponseEntity.ok(new ProdutoResponse(produtoService.salvar(productDTO, file)));
     }
 
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ProdutoResponse> salvarJson(
+            @RequestBody @Valid CreateProductDTO productDTO) throws IOException {
+        return ResponseEntity.ok(new ProdutoResponse(produtoService.salvar(productDTO, null)));
+    }
+
     @PostMapping("save-list")
     public ResponseEntity<List<ProdutoResponse>> saveProdutos(@RequestBody @Valid List<CreateProductDTO> productDTOS) {
         return ResponseEntity.ok(produtoService.salvarList(productDTOS).stream().map(ProdutoResponse::new).toList());
@@ -78,16 +84,28 @@ public class ProdutoController {
         return ResponseEntity.ok(new ProdutoResponse(produtoService.buscarPorId(id)));
     }
 
-    @PutMapping("/{id}")
+    @GetMapping("/{id}/disponibilidade-condominios")
+    public ResponseEntity<?> disponibilidadeCondominios(@PathVariable String id) {
+        return ResponseEntity.ok(produtoService.disponibilidadeCondominios(id));
+    }
+
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ProdutoResponse> atualizarProduto(
             @PathVariable String id,
-            @RequestPart("data") CreateProductDTO dto,
+            @RequestPart("data") @Valid CreateProductDTO dto,
             @RequestPart(value = "file", required = false) MultipartFile file
     ) throws IOException {
 
         Produto produtoAtualizado = produtoService.atualizar(id, dto, file);
 
         return ResponseEntity.ok(new ProdutoResponse(produtoAtualizado));
+    }
+
+    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ProdutoResponse> atualizarProdutoJson(
+            @PathVariable String id,
+            @RequestBody @Valid CreateProductDTO dto) throws IOException {
+        return ResponseEntity.ok(new ProdutoResponse(produtoService.atualizar(id, dto, null)));
     }
 
     @PatchMapping("/{id}/disponibilidade")

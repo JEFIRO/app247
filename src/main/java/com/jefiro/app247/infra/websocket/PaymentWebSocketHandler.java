@@ -3,6 +3,7 @@ package com.jefiro.app247.infra.websocket;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jefiro.app247.infra.event.PaymentEvent;
+import com.jefiro.app247.infra.event.TerminalFactoryResetRequiredEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -34,13 +35,16 @@ public class PaymentWebSocketHandler extends TextWebSocketHandler {
 
         sessions.put(terminalId, session);
 
-        log.info("Terminal conectado ao canal de pagamento: terminalId={}", terminalId);
+        log.info("[PAYMENT-WS] socket nativo conectado terminalId={} activeSessions={}",
+                terminalId, sessions.size());
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
 
         sessions.values().remove(session);
+        log.info("[PAYMENT-WS] socket nativo desconectado status={} activeSessions={}",
+                status, sessions.size());
     }
 
 
@@ -50,8 +54,16 @@ public class PaymentWebSocketHandler extends TextWebSocketHandler {
             log.info("Resultado de pagamento enviado ao terminal: terminalId={}, orderId={}, status={}",
                     event.getTerminalId(), event.getOrderId(), event.getStatus());
         } else {
-            log.info("Terminal sem WebSocket ativo; status permanece consultável: terminalId={}, orderId={}, status={}",
-                    event.getTerminalId(), event.getOrderId(), event.getStatus());
+            log.info("[PAYMENT-WS] terminal sem socket nativo; status permanece consultável terminalId={} orderId={} status={} activeSessions={}",
+                    event.getTerminalId(), event.getOrderId(), event.getStatus(), sessions.size());
+        }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void sendFactoryResetToTerminal(TerminalFactoryResetRequiredEvent event) {
+        if (!sendToTerminal(event.terminalId(), event)) {
+            log.info("[TERMINAL-RESET] terminal offline; comando permanece no bootstrap terminalId={}",
+                    event.terminalId());
         }
     }
 

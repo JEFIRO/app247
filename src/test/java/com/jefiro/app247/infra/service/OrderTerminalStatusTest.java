@@ -2,10 +2,14 @@ package com.jefiro.app247.infra.service;
 
 import com.jefiro.app247.domain.model.Carrinho;
 import com.jefiro.app247.domain.model.Order;
+import com.jefiro.app247.domain.model.PaymentAttempt;
+import com.jefiro.app247.domain.model.dto.PaymentStatusResponse;
+import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
 import com.jefiro.app247.domain.model.terminal.Terminal;
 import com.jefiro.app247.infra.repository.OrderRepository;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
@@ -48,11 +52,39 @@ class OrderTerminalStatusTest {
         Carrinho carrinho = new Carrinho();
         carrinho.setIdCarrinho("cart-a");
         Order order = new Order();
+        order.setPagamento(new com.jefiro.app247.domain.model.PaymentAttempt(order));
         order.setMpOrderId("mp-order-a");
         when(repository.findByCarrinhoIdCarrinho("cart-a")).thenReturn(Optional.of(order));
 
         assertThat(service.criarCobranca(carrinho)).isSameAs(order);
         verify(carrinhoService).validarParaPagamento(carrinho);
         verifyNoInteractions(publisher);
+    }
+
+    @Test
+    void statusRecuperadoIncluiCarrinhoEValorMesmoSemEstadoVisualDoTerminal() {
+        Terminal terminal = new Terminal();
+        terminal.setIdTerminal("terminal-a");
+        Carrinho carrinho = new Carrinho();
+        carrinho.setIdCarrinho("cart-a");
+        carrinho.setTerminal(terminal);
+        Order order = new Order();
+        order.setIdOrder("order-a");
+        order.setCarrinho(carrinho);
+        order.setTotalCobrado(new BigDecimal("19.90"));
+        order.setStatus(OrderStatus.PROCESSED);
+        PaymentAttempt attempt = new PaymentAttempt();
+        attempt.setIdPagamento("attempt-a");
+        attempt.setAttemptNumber(1);
+        order.setPagamento(attempt);
+
+        PaymentStatusResponse response = PaymentStatusResponse.from(order, true);
+
+        assertThat(response.orderId()).isEqualTo("order-a");
+        assertThat(response.cartId()).isEqualTo("cart-a");
+        assertThat(response.paymentAttemptId()).isEqualTo("attempt-a");
+        assertThat(response.amount()).isEqualByComparingTo("19.90");
+        assertThat(response.status().name()).isEqualTo("APPROVED");
+        assertThat(response.reconciled()).isTrue();
     }
 }

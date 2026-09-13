@@ -7,7 +7,6 @@ import com.jefiro.app247.domain.model.dto.*;
 import com.jefiro.app247.domain.model.terminal.Terminal;
 import com.jefiro.app247.infra.dto.onboarding.CadastroCompletoRequest;
 import com.jefiro.app247.infra.dto.onboarding.OnboardingResponse;
-import com.jefiro.app247.infra.repository.CondominioRepository;
 import com.jefiro.app247.infra.repository.TerminalRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +27,6 @@ class OnboardingServiceTest {
     @Mock UserService userService;
     @Mock CondominioService condominioService;
     @Mock TerminalService terminalService;
-    @Mock CondominioRepository condominioRepository;
     @Mock TerminalRepository terminalRepository;
 
     @Test
@@ -43,8 +41,7 @@ class OnboardingServiceTest {
 
         when(empresaService.newEmpresa(any())).thenReturn(empresa);
         when(userService.cadastrarGestor(request.gestor(), empresa)).thenReturn(gestor);
-        when(condominioService.construir(request.condominio(), empresa)).thenReturn(condominio);
-        when(condominioRepository.save(condominio)).thenReturn(condominio);
+        when(condominioService.salvarNovo(request.condominio(), empresa)).thenReturn(condominio);
         when(terminalService.construir(request.terminal(), condominio)).thenReturn(terminal);
         when(terminalRepository.save(terminal)).thenReturn(terminal);
 
@@ -52,10 +49,10 @@ class OnboardingServiceTest {
 
         assertEquals("empresa-a", response.empresaId());
         assertEquals(condominio, gestor.getCondominio());
-        InOrder ordem = inOrder(empresaService, userService, condominioRepository, terminalRepository);
+        InOrder ordem = inOrder(empresaService, userService, condominioService, terminalRepository);
         ordem.verify(empresaService).newEmpresa(any());
         ordem.verify(userService).cadastrarGestor(request.gestor(), empresa);
-        ordem.verify(condominioRepository).save(condominio);
+        ordem.verify(condominioService).salvarNovo(request.condominio(), empresa);
         ordem.verify(terminalRepository).save(terminal);
     }
 
@@ -68,8 +65,7 @@ class OnboardingServiceTest {
         Terminal terminal = new Terminal();
         when(empresaService.newEmpresa(any())).thenReturn(empresa);
         when(userService.cadastrarGestor(any(), eq(empresa))).thenReturn(gestor);
-        when(condominioService.construir(any(), eq(empresa))).thenReturn(condominio);
-        when(condominioRepository.save(condominio)).thenReturn(condominio);
+        when(condominioService.salvarNovo(any(), eq(empresa))).thenReturn(condominio);
         when(terminalService.construir(any(), eq(condominio))).thenReturn(terminal);
         when(terminalRepository.save(terminal)).thenThrow(new IllegalStateException("terminal inválido"));
 
@@ -80,7 +76,7 @@ class OnboardingServiceTest {
 
     private OnboardingService service() {
         return new OnboardingService(empresaService, userService, condominioService, terminalService,
-                condominioRepository, terminalRepository);
+                terminalRepository);
     }
 
     private CadastroCompletoRequest request() {

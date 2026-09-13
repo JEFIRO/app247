@@ -10,4 +10,6 @@ public interface CondominioRepository extends JpaRepository<Condominio, String> 
     List<Condominio> findAllByEmpresaIdOrderByNome(String empresaId);
 
     Optional<Condominio> findByIdCondominioAndEmpresaId(String condominioId, String empresaId);
+
+    boolean existsByEmpresaIdAndAtivoTrue(String empresaId);
 }

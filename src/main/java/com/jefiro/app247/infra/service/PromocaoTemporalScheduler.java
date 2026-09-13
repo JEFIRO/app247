@@ -6,21 +6,20 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.Instant;
 
 @Service
 public class PromocaoTemporalScheduler {
     @Autowired private PromocaoRepository promocaoRepository;
     @Autowired private PromocaoService promocaoService;
 
-    private LocalDateTime ultimoCiclo = LocalDateTime.now(ZoneOffset.UTC);
+    private Instant ultimoCiclo = Instant.now();
 
     @Scheduled(fixedDelayString = "${promotions.transition-delay-ms:60000}")
     @Transactional
     public void notificarTransicoes() {
-        LocalDateTime agora = LocalDateTime.now(ZoneOffset.UTC);
-        LocalDateTime inicio = ultimoCiclo;
+        Instant agora = Instant.now();
+        Instant inicio = ultimoCiclo;
         ultimoCiclo = agora;
         promocaoRepository.findTransicoes(inicio, agora)
                 .forEach(promocaoService::publicarTransicao);

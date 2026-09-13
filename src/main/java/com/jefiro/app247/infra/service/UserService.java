@@ -31,7 +31,6 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.security.SecureRandom;
@@ -266,7 +265,7 @@ public class UserService {
             user.setCondominio(condominio);
         }
 
-        user.setUpdatedAt(LocalDateTime.now());
+        user.setUpdatedAt(java.time.Instant.now());
 
         repository.save(user);
     }
@@ -299,7 +298,7 @@ public class UserService {
         redisTemplate.delete("email_validation_queue:" + emailValidate.getEmail());
         repository.findByEmail(emailValidate.getEmail()).ifPresent(user -> {
             user.setEmailVerificado(true);
-            user.setUpdatedAt(LocalDateTime.now());
+            user.setUpdatedAt(java.time.Instant.now());
             repository.save(user);
         });
 

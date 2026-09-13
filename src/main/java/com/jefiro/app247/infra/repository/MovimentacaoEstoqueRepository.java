@@ -9,4 +9,7 @@ public interface MovimentacaoEstoqueRepository extends JpaRepository<Movimentaca
     boolean existsByChaveIdempotencia(String chave);
     List<MovimentacaoEstoque> findAllByEstoqueCondominioIdCondominioAndEstoqueCondominioEmpresaIdOrderByCreatedAtDesc(
             String condominioId, String empresaId);
+    List<MovimentacaoEstoque> findAllByEstoqueEmpresaEmpresaIdOrderByCreatedAtDesc(String empresaId);
+    List<MovimentacaoEstoque> findAllByTransferenciaIdOrderByCreatedAtAsc(String transferenciaId);
+    List<MovimentacaoEstoque> findAllByInventarioIdOrderByCreatedAtAsc(String inventarioId);
 }

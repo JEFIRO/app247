@@ -34,6 +34,7 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
         acknowledgement.put("terminalId", terminal.getIdTerminal());
         acknowledgement.put("status", terminal.getStatus().name());
         acknowledgement.put("lastPing", terminal.getLastPing().toString());
+        acknowledgement.put("lifecycleState", terminal.getLifecycleState().name());
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(acknowledgement)));
     }
 }

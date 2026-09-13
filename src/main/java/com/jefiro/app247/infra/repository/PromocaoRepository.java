@@ -5,7 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,11 +23,11 @@ public interface PromocaoRepository extends JpaRepository<Promocao, String> {
     List<Promocao> findAplicaveis(@Param("empresaId") String empresaId,
                                   @Param("condominioId") String condominioId,
                                   @Param("produtoId") String produtoId,
-                                  @Param("agora") LocalDateTime agora);
+                                  @Param("agora") Instant agora);
 
     @Query("select distinct p from Promocao p join fetch p.produtos pp " +
             "where p.ativo=true and ((p.inicio>:inicio and p.inicio<=:fim) " +
             "or (p.fim>:inicio and p.fim<=:fim))")
-    List<Promocao> findTransicoes(@Param("inicio") LocalDateTime inicio,
-                                  @Param("fim") LocalDateTime fim);
+    List<Promocao> findTransicoes(@Param("inicio") Instant inicio,
+                                  @Param("fim") Instant fim);
 }

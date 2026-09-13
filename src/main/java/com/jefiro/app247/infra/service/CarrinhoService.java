@@ -2,7 +2,7 @@ package com.jefiro.app247.infra.service;
 
 import com.jefiro.app247.domain.model.Carrinho;
 import com.jefiro.app247.domain.model.Empresa;
-import com.jefiro.app247.domain.model.Item;
+import com.jefiro.app247.domain.model.CartItem;
 import com.jefiro.app247.domain.model.Produto;
 import com.jefiro.app247.domain.model.dto.CarrinhoRequest;
 import com.jefiro.app247.domain.model.dto.ItemRequest;
@@ -16,8 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -62,16 +61,20 @@ public class CarrinhoService {
             if (i == null || i.productId() == null || i.productId().isBlank()) {
                 throw new IllegalArgumentException("Item e produto devem ser informados");
             }
-            if (i.quantity() == null || i.quantity() <= 0) {
+            if (i.quantity() == null || i.quantity().signum() <= 0) {
                 throw new IllegalArgumentException("Quantidade do item deve ser positiva");
             }
             if (!produtosIncluidos.add(i.productId())) {
                 throw new IllegalArgumentException("Produto duplicado no carrinho");
             }
             Produto produto = produtoService.buscarPorIdDoTenant(i.productId(), empresa.getId());
+            com.jefiro.app247.domain.model.ProdutoCodigoBarras barcode =
+                    i.codigoBarras() == null || i.codigoBarras().isBlank() ? null
+                            : produtoService.validarCodigoBarrasDoProduto(
+                            empresa.getId(), produto.getIdProduto(), i.codigoBarras().trim());
             var preco = pricingService.calcular(
-                    produto, terminal.getCondominio(), LocalDateTime.now(ZoneOffset.UTC));
-            itens.add(new ItemPrecificado(i, preco));
+                    produto, terminal.getCondominio(), Instant.now());
+            itens.add(new ItemPrecificado(i, preco, barcode));
             boolean aumentou = i.expectedUnitPrice() != null
                     && preco.precoCalculado().compareTo(i.expectedUnitPrice()) > 0;
             houveAumento |= aumentou;
@@ -91,8 +94,12 @@ public class CarrinhoService {
         }
         for (ItemPrecificado precificado : itens) {
             ItemRequest i = precificado.request();
-            Item item = new Item(precificado.preco(), i.quantity(), i.receivedWeight());
+            CartItem item = new CartItem(precificado.preco(), i.quantity(), i.receivedWeight());
             item.setEmpresa(precificado.preco().produto().getEmpresa());
+            if (precificado.barcode() != null) {
+                item.setCodigoBarrasReferencia(precificado.barcode());
+                item.setBarcode(precificado.barcode().getCodigoBarras());
+            }
             carrinho.addItem(item);
         }
 
@@ -142,9 +149,9 @@ public class CarrinhoService {
         }
 
         BigDecimal subtotalCalculado = BigDecimal.ZERO;
-        for (Item item : carrinho.getItems()) {
+        for (CartItem item : carrinho.getItems()) {
             if (item == null || item.getProduto() == null || item.getUnitPrice() == null
-                    || item.getQuantity() == null || item.getQuantity() <= 0) {
+                    || item.getQuantity() == null || item.getQuantity().signum() <= 0) {
                 throw new IllegalStateException("Carrinho possui item inconsistente");
             }
             if (item.getEmpresa() == null || item.getProduto().getEmpresa() == null
@@ -153,7 +160,7 @@ public class CarrinhoService {
                 throw new IllegalStateException("Carrinho possui item de outra empresa");
             }
             subtotalCalculado = subtotalCalculado.add(
-                    item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity()))
+                    item.getUnitPrice().multiply(item.getQuantity())
             );
         }
         if (carrinho.getSubtotal() == null
@@ -169,9 +176,9 @@ public class CarrinhoService {
         boolean houveAumento = false;
         BigDecimal total = BigDecimal.ZERO;
         var condominio = carrinho.getTerminal().getCondominio();
-        LocalDateTime agora = LocalDateTime.now(ZoneOffset.UTC);
+        Instant agora = Instant.now();
         List<PrecoAtualizacao> atualizacoes = new ArrayList<>();
-        for (Item item : carrinho.getItems()) {
+        for (CartItem item : carrinho.getItems()) {
             var atual = pricingService.calcular(item.getProduto(), condominio, agora);
             atualizacoes.add(new PrecoAtualizacao(item, atual));
             total = total.add(atual.subtotal(item.getQuantity()));
@@ -189,7 +196,7 @@ public class CarrinhoService {
             throw new PriceChangedException(precosAtuais, total, MoneyPolicy.chargedForPersistence(total));
         }
         for (PrecoAtualizacao atualizacao : atualizacoes) {
-            Item item = atualizacao.item();
+            CartItem item = atualizacao.item();
             var preco = atualizacao.preco();
             item.setOriginalPrice(preco.precoOriginal());
             item.setUnitPrice(preco.precoCalculado());
@@ -204,8 +211,9 @@ public class CarrinhoService {
     }
 
     private record ItemPrecificado(ItemRequest request,
-                                   com.jefiro.app247.domain.model.dto.PrecoCalculado preco) {}
-    private record PrecoAtualizacao(Item item,
+                                   com.jefiro.app247.domain.model.dto.PrecoCalculado preco,
+                                   com.jefiro.app247.domain.model.ProdutoCodigoBarras barcode) {}
+    private record PrecoAtualizacao(CartItem item,
                                     com.jefiro.app247.domain.model.dto.PrecoCalculado preco) {}
 
 }

@@ -28,7 +28,7 @@ public class PriceChangedException extends RuntimeException {
             boolean emPromocao,
             String promocaoId,
             String promocaoNome,
-            int quantidade,
+            BigDecimal quantidade,
             boolean aumentou
     ) {
     }

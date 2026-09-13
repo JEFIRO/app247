@@ -1,0 +1,7 @@
+package com.jefiro.app247.domain.model.enum_type;
+
+public enum TelemetryAlertType {
+    TERMINAL_OFFLINE, HIGH_TEMPERATURE, UNDERVOLTAGE, THROTTLING,
+    HIGH_DISK_USAGE, WEAK_WIFI, HIGH_BACKEND_LATENCY,
+    WEBSOCKET_DISCONNECTED, SYNC_DELAYED
+}

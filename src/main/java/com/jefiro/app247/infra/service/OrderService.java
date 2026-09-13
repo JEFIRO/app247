@@ -2,12 +2,11 @@ package com.jefiro.app247.infra.service;
 
 import com.jefiro.app247.domain.model.Carrinho;
 import com.jefiro.app247.domain.model.Order;
-import com.jefiro.app247.domain.model.Pagamento;
+import com.jefiro.app247.domain.model.PaymentAttempt;
 import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.dto.OrderDTO;
 import com.jefiro.app247.domain.model.enum_type.CarrinhoStatus;
 import com.jefiro.app247.domain.model.enum_type.OriginRequest;
-import com.jefiro.app247.infra.event.MercadoPagoCobrancaEvent;
 import com.jefiro.app247.infra.event.OrderReservadaEvent;
 import com.jefiro.app247.infra.repository.OrderRepository;
 import jakarta.transaction.Transactional;
@@ -29,7 +28,6 @@ public class OrderService {
     CarrinhoService carrinhoService;
     @Autowired
     UserService userService;
-    @Autowired
     ApplicationEventPublisher eventPublisher;
 
     @Transactional
@@ -83,7 +81,7 @@ public class OrderService {
             order.setUser(user);
         }
 
-        Pagamento pagamento = new Pagamento(order);
+        PaymentAttempt pagamento = new PaymentAttempt(order);
         order.setPagamento(pagamento);
 
         return repository.save(order);
@@ -106,7 +104,6 @@ public class OrderService {
         carrinho.setStatus(CarrinhoStatus.PAYMENT_PENDING);
         carrinhoService.save(carrinho);
 
-        eventPublisher.publishEvent(new MercadoPagoCobrancaEvent(order));
         return order;
     }
 

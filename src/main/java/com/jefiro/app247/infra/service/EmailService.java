@@ -199,7 +199,8 @@ public class EmailService {
     public String gerarTemplateBoasVindas(User usuario) {
         String nome = usuario.getNome();
         String email = usuario.getEmail();
-        String dataCadastro = usuario.getCreatedAt().format(DateTimeFormatter.ofPattern("dd/MM/yyyy 'às' HH'h'mm"));
+        String dataCadastro = DateTimeFormatter.ofPattern("dd/MM/yyyy 'às' HH'h'mm")
+                .withZone(TimePolicy.DISPLAY_ZONE).format(usuario.getCreatedAt());
 
         return """
                 <!DOCTYPE html>

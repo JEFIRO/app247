@@ -1,44 +1,117 @@
-  services:
-    app:
-      build: .
+name: app247
 
-      container_name: app_24-7
-      restart: unless-stopped
-      ports:
-        - "8080:8080"
+services:
+  app:
+    image: jefiroo/app247-backend
+    container_name: app247-api
 
-      environment:
-        SPRING_PROFILES_ACTIVE: prod
-        SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/sistema
-        SPRING_DATASOURCE_USERNAME: root
-        SPRING_DATASOURCE_PASSWORD: 0000
-        SPRING_DATA_REDIS_HOST: redis
-        SPRING_DATA_REDIS_PORT: 6379
-      depends_on:
-        - mysql
-        - redis
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      PORT: 8080
+      DB_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-app247}?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true"
+      DB_USERNAME: "${MYSQL_USER}"
+      DB_PASSWORD: "${MYSQL_PASSWORD}"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT: "${JWT}"
+      TEST_ENDPOINTS_ENABLED: "false"
+      APP_CORS_ALLOWED_ORIGIN_PATTERNS: "${APP_CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost:*,http://127.0.0.1:*}"
+      SMTP_HOST: "${SMTP_HOST:-smtp.gmail.com}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USERNAME: "${SMTP_USERNAME:-}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+      MP_CLIENT_ID: "${MP_CLIENT_ID:-}"
+      MP_CLIENT_SECRET: "${MP_CLIENT_SECRET:-}"
+      MP_WEBHOOK_SECRET: "${MP_WEBHOOK_SECRET:-}"
+      MP_OAUTH_REDIRECT_URL: "${MP_OAUTH_REDIRECT_URL:-}"
+      MP_WEBHOOK_URL: "${MP_WEBHOOK_URL:-}"
+      MP_TEST_ACCESS_TOKEN: "${MP_TEST_ACCESS_TOKEN:-}"
+      MP_TEST_TERMINAL_ID: "${MP_TEST_TERMINAL_ID:-NEWLAND_N950__SBX0000001}"
+      JAVA_TOOL_OPTIONS: "${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError}"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - uploads_data:/app/uploads
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
 
-    mysql:
-      image: mysql:8
-      container_name: mysqlll
-      restart: unless-stopped
-      environment:
-        MYSQL_ROOT_PASSWORD: 0000
-        MYSQL_DATABASE: sistema
-      ports:
-        - "3306:3306"
-      volumes:
-        - mysql_data:/var/lib/mysql
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: ngrok
+    restart: unless-stopped
+    depends_on:
+      - app
+    command:
+      - "http"
+      - "app:8080"
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    ports:
+      - "4040:4040"
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-app247}"
+      MYSQL_USER: "${MYSQL_USER}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+      TZ: UTC
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data_v2:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD-SHELL", "mysqladmin ping --host=localhost --user=root --password=\"$${MYSQL_ROOT_PASSWORD}\" --silent" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
 
-    redis:
-      image: redis:8
-      container_name: redis
-      restart: unless-stopped
-      ports:
-        - "6379:6379"
-      volumes:
-        - redis_data:/data
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: [ "redis-server", "--appendonly", "yes", "--appendfsync", "everysec" ]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
 
-  volumes:
-    mysql_data:
-    redis_data:
+volumes:
+  mysql_data_v2:
+  redis_data:
+  uploads_data:

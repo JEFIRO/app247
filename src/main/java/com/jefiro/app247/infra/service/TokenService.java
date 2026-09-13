@@ -2,14 +2,13 @@ package com.jefiro.app247.infra.service;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.JWTCreator;
+import com.auth0.jwt.interfaces.DecodedJWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.jefiro.app247.domain.model.auth.User;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 
 @Service
 public class TokenService {
@@ -32,18 +31,29 @@ public class TokenService {
     }
 
     public String validate(String token) {
+        return validateIdentity(token).subject();
+    }
+
+    public TokenIdentity validateIdentity(String token) {
         try {
             Algorithm algorithm = Algorithm.HMAC256(senha);
-            return JWT.require(algorithm)
+            DecodedJWT jwt = JWT.require(algorithm)
                     .build()
-                    .verify(token)
-                    .getSubject();
+                    .verify(token);
+            return new TokenIdentity(
+                    jwt.getSubject(),
+                    jwt.getClaim("userId").asString(),
+                    jwt.getClaim("empresaId").asString()
+            );
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
     public Instant genereteExpirationDate() {
-        return LocalDateTime.now().plusHours(200).toInstant(ZoneOffset.of("-03:00"));
+        return Instant.now().plus(java.time.Duration.ofHours(200));
+    }
+
+    public record TokenIdentity(String subject, String userId, String empresaId) {
     }
 }

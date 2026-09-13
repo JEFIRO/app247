@@ -10,6 +10,7 @@ public class PaymentEvent {
     private String type;
     private String terminalId;
     private String orderId;
+    private String paymentAttemptId;
     private String transactionId;
     private TerminalPaymentStatus status;
     private OrderStatus mercadoPagoStatus;
@@ -30,6 +31,7 @@ public class PaymentEvent {
         this.type = response.type();
         this.terminalId = response.terminalId();
         this.orderId = response.orderId();
+        this.paymentAttemptId = response.paymentAttemptId();
         this.transactionId = response.transactionId();
         this.status = response.status();
         this.mercadoPagoStatus = response.mercadoPagoStatus();

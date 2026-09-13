@@ -13,13 +13,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class PricingServiceTest {
@@ -30,7 +31,7 @@ class PricingServiceTest {
     Empresa empresa;
     Condominio condominio;
     Produto produto;
-    LocalDateTime agora;
+    Instant agora;
 
     @BeforeEach
     void setup() {
@@ -50,7 +51,7 @@ class PricingServiceTest {
         estoque.setQuantidade(new BigDecimal("-5.000"));
         when(estoqueRepository.findByCondominioIdCondominioAndProdutoIdProdutoAndAtivoTrue(
                 "cond-a", "produto-a")).thenReturn(Optional.of(estoque));
-        agora = LocalDateTime.of(2026, 8, 30, 12, 0);
+        agora = Instant.parse("2026-08-30T15:00:00Z");
     }
 
     @Test
@@ -112,6 +113,18 @@ class PricingServiceTest {
         when(promocaoRepository.findAplicaveis(anyString(), anyString(), anyString(), any()))
                 .thenReturn(List.of(prioridade1, prioridade2));
         assertEquals("x", service.calcular(produto, condominio, agora).promocao().getIdPromocao());
+    }
+
+    @Test
+    void naoAplicaNemDisponibilizaProdutoSemEstoqueAtivo() {
+        when(estoqueRepository.findByCondominioIdCondominioAndProdutoIdProdutoAndAtivoTrue(
+                "cond-a", "produto-a")).thenReturn(Optional.empty());
+
+        var error = assertThrows(IllegalArgumentException.class,
+                () -> service.calcular(produto, condominio, agora));
+
+        assertEquals("Produto não está disponível neste condomínio.", error.getMessage());
+        verifyNoInteractions(promocaoRepository);
     }
 
     private Promocao promocao(String id, AbrangenciaPromocao abrangencia,

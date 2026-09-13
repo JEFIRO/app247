@@ -1,0 +1,16 @@
+.git
+.github
+.idea
+.vscode
+.mvn
+24por7_contexto
+data
+target
+uploads
+.env
+.env.*
+!.env.example
+*.iml
+*.log
+mvnw
+mvnw.cmd

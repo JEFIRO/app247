@@ -26,6 +26,9 @@ public class PaymentWorker {
     @Autowired
     private PagamentoService pagamentoService;
 
+    @Autowired
+    private WebhookInboxService webhookInboxService;
+
     @Scheduled(fixedDelay = 2000)
     public void processQueue() {
         String json = redisTemplate.opsForList().rightPopAndLeftPush(QUEUE, PROCESSING_QUEUE);
@@ -35,6 +38,7 @@ public class PaymentWorker {
 
         try {
             pagamentoService.atualizarPagamento(json);
+            webhookInboxService.markProcessedSafely(json);
             redisTemplate.opsForList().remove(PROCESSING_QUEUE, 1, json);
             redisTemplate.delete(retryKey(json));
         } catch (Exception e) {
@@ -44,6 +48,7 @@ public class PaymentWorker {
             redisTemplate.opsForList().remove(PROCESSING_QUEUE, 1, json);
             if (attempts != null && attempts >= MAX_ATTEMPTS) {
                 redisTemplate.opsForList().leftPush(DEAD_LETTER_QUEUE, json);
+                webhookInboxService.markDeadLetterSafely(json, e);
                 redisTemplate.delete(retryKey);
                 log.error("Webhook Mercado Pago enviado para DLQ após {} tentativas: errorType={}",
                         attempts, e.getClass().getSimpleName());

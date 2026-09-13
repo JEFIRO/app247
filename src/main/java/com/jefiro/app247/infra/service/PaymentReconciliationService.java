@@ -12,8 +12,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class PaymentReconciliationService {
@@ -25,43 +27,68 @@ public class PaymentReconciliationService {
     @Autowired OrderRepository orderRepository;
     @Autowired MercadoPagoOrderQueryService mercadoPagoOrderQueryService;
     @Autowired PaymentStateTransitionService transitionService;
+    @Autowired PointPaymentSubmissionService submissionService;
 
     @Value("${payment.reconciliation.window-hours:4}")
     int windowHours;
     @Value("${payment.reconciliation.batch-size:100}")
     int batchSize;
+    @Value("${payment.reconciliation.submission-retry-cooldown-ms:5000}")
+    long submissionRetryCooldownMs;
 
     public PaymentStatusResponse reconcileForTerminal(String orderId, String terminalId) {
+        return reconcileForTerminal(orderId, terminalId, "STATUS_QUERY");
+    }
+
+    private PaymentStatusResponse reconcileForTerminal(
+            String orderId, String terminalId, String origin) {
         Order order = orderService.getOrderForTerminal(orderId, terminalId);
         validateOwnership(order);
-        if (!isReconciliable(order) || order.getMpOrderId() == null) {
+        if (!isReconciliable(order)) {
             return PaymentStatusResponse.from(order, false);
         }
         try {
-            reconcile(order);
-            return PaymentStatusResponse.from(orderService.getOrderForTerminal(orderId, terminalId), true);
+            boolean remoteContacted = reconcileOrRecover(order, origin);
+            return PaymentStatusResponse.from(
+                    orderService.getOrderForTerminal(orderId, terminalId), remoteContacted);
         } catch (RuntimeException error) {
-            log.warn("[PAYMENT-RECONCILIATION] consulta sob demanda falhou; orderId={} errorType={}",
-                    orderId, error.getClass().getSimpleName());
+            log.warn("[PAYMENT-RECONCILIATION] consulta sob demanda falhou; origin={} orderId={} errorType={}",
+                    origin, orderId, error.getClass().getSimpleName());
             return PaymentStatusResponse.from(orderService.getOrderForTerminal(orderId, terminalId), false);
         }
     }
 
     public boolean reconcileOrder(String orderId) {
         Order order = orderService.getOrderForReconciliation(orderId);
-        if (!isReconciliable(order) || order.getMpOrderId() == null) return false;
-        return reconcile(order);
+        return reconcileOrRecover(order, "MANUAL");
+    }
+
+    public Optional<PaymentStatusResponse> recoverActiveForTerminal(String terminalId) {
+        List<String> orderIds = orderRepository.findUnresolvedPaymentOrderIdsForTerminal(
+                terminalId, RECONCILIABLE, PageRequest.of(0, 2));
+        if (orderIds.isEmpty()) {
+            log.info("[PAYMENT-RECOVERY] nenhuma tentativa ativa terminalId={} origin=TERMINAL_STARTUP",
+                    terminalId);
+            return Optional.empty();
+        }
+        if (orderIds.size() > 1) {
+            log.error("[PAYMENT-INTEGRITY] múltiplas orders não resolvidas terminalId={} orderIds={}",
+                    terminalId, orderIds);
+        }
+        String orderId = orderIds.get(0);
+        return Optional.of(reconcileForTerminal(orderId, terminalId, "TERMINAL_RECOVERY"));
     }
 
     public void reconcileRecent(String origin) {
-        LocalDateTime cutoff = LocalDateTime.now().minusHours(windowHours);
+        Instant cutoff = Instant.now().minus(java.time.Duration.ofHours(windowHours));
         List<String> candidateIds = orderRepository.findRecentReconciliationCandidateIds(
                 RECONCILIABLE, cutoff, PageRequest.of(0, batchSize));
         log.info("[PAYMENT-RECONCILIATION] iniciando origin={} candidates={} windowHours={}",
                 origin, candidateIds.size(), windowHours);
         for (String orderId : candidateIds) {
             try {
-                reconcileOrder(orderId);
+                Order order = orderService.getOrderForReconciliation(orderId);
+                reconcileOrRecover(order, origin);
             } catch (RuntimeException error) {
                 log.warn("[PAYMENT-RECONCILIATION] falha isolada; origin={} orderId={} errorType={}",
                         origin, orderId, error.getClass().getSimpleName());
@@ -69,9 +96,39 @@ public class PaymentReconciliationService {
         }
     }
 
-    private boolean reconcile(Order order) {
+    private boolean reconcileOrRecover(Order order, String origin) {
+        if (!isReconciliable(order)) return false;
+        if (order.getMpOrderId() != null) {
+            return reconcile(order, origin);
+        }
+        if (!isUnknownSubmissionEligible(order)) {
+            log.info("[PAYMENT-RECOVERY] aguardando cooldown origin={} orderId={} attemptId={} status={}",
+                    origin, order.getIdOrder(),
+                    order.getPagamento() != null ? order.getPagamento().getIdPagamento() : null,
+                    order.getStatus());
+            return false;
+        }
+        log.warn("[PAYMENT-RECOVERY] repetindo mesma tentativa idempotente origin={} orderId={} attemptId={} status={}",
+                origin, order.getIdOrder(), order.getPagamento().getIdPagamento(), order.getStatus());
+        submissionService.submitSameAttempt(order.getIdOrder(), origin);
+        return true;
+    }
+
+    private boolean isUnknownSubmissionEligible(Order order) {
+        if (order.getStatus() != OrderStatus.PENDING || order.getPagamento() == null) {
+            return false;
+        }
+        Instant lastChange = order.getPagamento().getUpdatedAt() != null
+                ? order.getPagamento().getUpdatedAt()
+                : order.getPagamento().getCreatedAt();
+        return lastChange == null || !lastChange.plus(
+                Duration.ofMillis(Math.max(0, submissionRetryCooldownMs))).isAfter(Instant.now());
+    }
+
+    private boolean reconcile(Order order, String origin) {
         validateOwnership(order);
-        log.info("[PAYMENT-RECONCILIATION] orderId={} paymentId={} localStatus={} mpOrderId={}",
+        log.info("[PAYMENT-RECONCILIATION] origin={} orderId={} paymentId={} localStatus={} mpOrderId={}",
+                origin,
                 order.getIdOrder(),
                 order.getPagamento() != null ? order.getPagamento().getIdPagamento() : null,
                 order.getStatus(), order.getMpOrderId());
@@ -81,13 +138,14 @@ public class PaymentReconciliationService {
             throw new IllegalStateException("Consulta retornou outra Order Mercado Pago");
         }
         if (remote.externalReference() == null
-                || !order.getIdOrder().equals(remote.externalReference())) {
+                || !order.getPagamento().getExternalReference().equals(remote.externalReference())) {
             throw new IllegalStateException("Consulta retornou external_reference divergente");
         }
-        MercadoPagoOrderState state = from(remote);
+        MercadoPagoOrderState state = MercadoPagoOrderState.from(remote);
         log.info("[PAYMENT-RECONCILIATION] orderId={} localStatus={} remoteStatus={}",
                 order.getIdOrder(), order.getStatus(), state.status());
-        return transitionService.apply(state);
+        transitionService.apply(state);
+        return true;
     }
 
     private boolean isReconciliable(Order order) {
@@ -105,19 +163,4 @@ public class PaymentReconciliationService {
         }
     }
 
-    private MercadoPagoOrderState from(OrderResponse response) {
-        OrderResponse.Payment payment = response.transactions() != null
-                && response.transactions().payments() != null
-                && !response.transactions().payments().isEmpty()
-                ? response.transactions().payments().get(0) : null;
-        return new MercadoPagoOrderState(
-                response.externalReference(), response.status(), response.statusDetail(),
-                payment != null && payment.statusDetail() != null
-                        ? payment.statusDetail() : response.statusDetail(),
-                payment != null ? payment.id() : null,
-                payment != null && payment.paymentMethod() != null ? payment.paymentMethod().id() : null,
-                payment != null && payment.paymentMethod() != null ? payment.paymentMethod().type() : null,
-                payment != null && payment.paymentMethod() != null ? payment.paymentMethod().installments() : null,
-                response.id(), response.version(), response.lastUpdatedDate());
-    }
 }

@@ -11,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.*;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -25,6 +26,7 @@ class MercadoPagoTerminalServiceTest {
     @Mock TerminalService terminalService;
     @Mock TerminalRepository terminalRepository;
     @Mock RestTemplate restTemplate;
+    @Mock TerminalPointBindingService pointBindingService;
 
     @AfterEach
     void limparContexto() {
@@ -40,7 +42,10 @@ class MercadoPagoTerminalServiceTest {
         when(terminalService.getTerminalDoTenant("interno-a")).thenReturn(terminal);
         mockTerminaisExternos("MP-A");
         when(terminalRepository.findByMercadoPagoTerminalId("MP-A")).thenReturn(Optional.empty());
-        when(terminalRepository.save(terminal)).thenReturn(terminal);
+        when(pointBindingService.vincular(terminal, conta, "MP-A")).thenAnswer(call -> {
+            terminal.setMercadoPagoTerminalId("MP-A");
+            return terminal;
+        });
 
         var response = service().vincular("interno-a", "MP-A");
 
@@ -78,7 +83,10 @@ class MercadoPagoTerminalServiceTest {
     }
 
     private MercadoPagoTerminalService service() {
-        return new MercadoPagoTerminalService(oauthService, terminalService, terminalRepository, restTemplate);
+        MercadoPagoTerminalService service = new MercadoPagoTerminalService(
+                oauthService, terminalService, terminalRepository, restTemplate);
+        ReflectionTestUtils.setField(service, "pointBindingService", pointBindingService);
+        return service;
     }
 
     private void mockTerminaisExternos(String id) {

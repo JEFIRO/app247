@@ -10,7 +10,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,6 +21,7 @@ import static org.mockito.Mockito.when;
 class TerminalServiceTest {
     @Mock TerminalRepository repository;
     @Mock CondominioService condominioService;
+    @Mock TerminalPresenceService presenceService;
     @InjectMocks TerminalService service;
 
     @Test
@@ -28,7 +29,7 @@ class TerminalServiceTest {
         Terminal terminal = new Terminal();
         terminal.setIdTerminal("terminal-a");
         terminal.setStatus(TerminalStatus.OFFLINE);
-        LocalDateTime anterior = LocalDateTime.now().minusMinutes(1);
+        Instant anterior = Instant.now().minusSeconds(60);
         terminal.setLastPing(anterior);
         when(repository.findById("terminal-a")).thenReturn(Optional.of(terminal));
         when(repository.saveAndFlush(any(Terminal.class)))

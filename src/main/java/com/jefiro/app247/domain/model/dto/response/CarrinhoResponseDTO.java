@@ -4,7 +4,7 @@ import com.jefiro.app247.domain.model.Carrinho;
 import com.jefiro.app247.domain.model.enum_type.CarrinhoStatus;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 public record CarrinhoResponseDTO(
@@ -19,9 +19,9 @@ public record CarrinhoResponseDTO(
 
         List<ItemResponseDTO> items,
 
-        LocalDateTime createdAt,
+        Instant createdAt,
 
-        LocalDateTime updatedAt
+        Instant updatedAt
 
 ) {
     public CarrinhoResponseDTO(Carrinho car) {

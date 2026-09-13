@@ -2,7 +2,7 @@ package com.jefiro.app247.infra.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jefiro.app247.domain.model.Order;
-import com.jefiro.app247.domain.model.Pagamento;
+import com.jefiro.app247.domain.model.PaymentAttempt;
 import com.jefiro.app247.domain.model.Carrinho;
 import com.jefiro.app247.domain.model.dto.OrderResponse;
 import com.jefiro.app247.domain.model.dto.PointPaymentResponse;
@@ -12,8 +12,10 @@ import com.jefiro.app247.infra.event.PaymentEvent;
 import com.jefiro.app247.domain.model.enum_type.PagamentoStatus;
 import com.jefiro.app247.domain.model.enum_type.PagamentoTipo;
 import com.jefiro.app247.domain.model.enum_type.PaymentMethodId;
+import com.jefiro.app247.domain.model.enum_type.PaymentProvider;
 import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
 import com.jefiro.app247.infra.repository.PagamentoRepository;
+import com.jefiro.app247.infra.repository.PaymentEventRepository;
 import com.jefiro.app247.infra.exception.UnknownExternalStatusException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +29,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import java.util.ArrayList;
+import java.util.Optional;
+
 @ExtendWith(MockitoExtension.class)
 class PagamentoServiceTest {
 
@@ -35,13 +40,16 @@ class PagamentoServiceTest {
     @Mock OrderService orderService;
     @Mock CarrinhoService carrinhoService;
     @Mock PagamentoRepository pagamentoRepository;
+    @Mock PaymentEventRepository paymentEventRepository;
     @Mock ApplicationEventPublisher eventPublisher;
     @Mock MercadoPagoOrderQueryService mercadoPagoOrderQueryService;
     @Mock PaymentReconciliationService reconciliationService;
+    @Mock PointPaymentPersistenceService pointPaymentPersistenceService;
+    @Mock PointPaymentSubmissionService submissionService;
     @InjectMocks PagamentoService pagamentoService;
 
     private Order order;
-    private Pagamento pagamento;
+    private PaymentAttempt pagamento;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -49,14 +57,24 @@ class PagamentoServiceTest {
         transitionService.orderService = orderService;
         transitionService.carrinhoService = carrinhoService;
         transitionService.pagamentoRepository = pagamentoRepository;
+        transitionService.paymentEventRepository = paymentEventRepository;
         transitionService.eventPublisher = eventPublisher;
         pagamentoService.transitionService = transitionService;
         order = new Order();
         order.setIdOrder(ORDER_ID);
         order.setStatus(OrderStatus.PENDING);
         order.setCarrinho(new Carrinho());
-        pagamento = new Pagamento();
+        pagamento = new PaymentAttempt();
+        pagamento.setIdPagamento("attempt-local-1");
+        pagamento.setAttemptNumber(1);
+        pagamento.setExternalReference("attempt-local-1");
+        pagamento.setIdempotencyKey("idem-attempt-local-1");
+        pagamento.setProviderOrderId("mp-order-1");
+        pagamento.setStatus(PagamentoStatus.PENDING);
         order.setPagamento(pagamento);
+        lenient().when(pagamentoRepository.findForTransition(
+                PaymentProvider.MERCADO_PAGO, "attempt-local-1"))
+                .thenReturn(Optional.of(pagamento));
 
         var mapper = PagamentoService.class.getDeclaredField("mapper");
         mapper.setAccessible(true);
@@ -89,7 +107,6 @@ class PagamentoServiceTest {
 
     @Test
     void cartaoRecusadoUsaStatusFailedEDetalheDaRecusa() throws Exception {
-        when(orderService.getOrderForUpdate(ORDER_ID)).thenReturn(order);
         when(pagamentoRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         when(orderService.save(any())).thenAnswer(call -> call.getArgument(0));
         String json = webhook("failed", "insufficient_amount", "credit_card", "visa", 1, true)
@@ -102,8 +119,7 @@ class PagamentoServiceTest {
         assertThat(pagamento.getStatus()).isEqualTo(PagamentoStatus.FAILED);
         assertThat(pagamento.getStatusDetail()).isEqualTo("insufficient_amount");
         assertThat(order.getMpStatusDetail()).isEqualTo(
-                com.jefiro.app247.domain.model.enum_type.order.StatusDetail.FAILED
-        );
+                com.jefiro.app247.domain.model.enum_type.order.StatusDetail.INSUFFICIENT_AMOUNT);
     }
 
     @Test
@@ -116,6 +132,22 @@ class PagamentoServiceTest {
         assertThat(captor.getAllValues()).anyMatch(
                 com.jefiro.app247.infra.event.CompraCanceladaEvent.class::isInstance);
         assertThat(captor.getAllValues()).anyMatch(PaymentEvent.class::isInstance);
+    }
+
+    @Test
+    void webhookSemTentativaLocalFalhaFortementeENaoCriaPagamentoRetroativo() throws Exception {
+        order.setPaymentAttempts(new ArrayList<>());
+        when(pagamentoRepository.findForTransition(
+                PaymentProvider.MERCADO_PAGO, "attempt-local-1"))
+                .thenReturn(Optional.empty());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> pagamentoService.atualizarPagamento(
+                        webhook("canceled", "canceled", null, null, null, false)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ATTEMPT_NOT_FOUND");
+
+        verify(pagamentoRepository, never()).save(any(PaymentAttempt.class));
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -168,14 +200,13 @@ class PagamentoServiceTest {
                 {
                   "id":"mp-order-1",
                   "type":"point",
-                  "external_reference":"order-local-1",
+                  "external_reference":"attempt-local-1",
                   "status":"expired",
                   "status_detail":"expired"
                 }
                 """, OrderResponse.class);
         when(mercadoPagoOrderQueryService.getOrder("mp-user-1", "mp-order-1"))
                 .thenReturn(response);
-        when(orderService.getOrderForUpdate(ORDER_ID)).thenReturn(order);
         when(pagamentoRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         when(orderService.save(any())).thenAnswer(call -> call.getArgument(0));
 
@@ -197,8 +228,6 @@ class PagamentoServiceTest {
         order.setStatus(OrderStatus.PROCESSED);
         order.setMpEventVersion(4);
         pagamento.setStatus(PagamentoStatus.PROCESSED);
-        when(orderService.getOrderForUpdate(ORDER_ID)).thenReturn(order);
-
         pagamentoService.atualizarPagamento(
                 webhook("failed", "processing_error", null, null, null, false)
                         .replace("\"version\":3", "\"version\":2")
@@ -215,8 +244,6 @@ class PagamentoServiceTest {
         order.setStatus(OrderStatus.PROCESSED);
         order.setMpEventVersion(3);
         pagamento.setStatus(PagamentoStatus.PROCESSED);
-        when(orderService.getOrderForUpdate(ORDER_ID)).thenReturn(order);
-
         pagamentoService.atualizarPagamento(
                 webhook("failed", "processing_error", null, null, null, false)
                         .replace("\"version\":3", "\"version\":4")
@@ -229,7 +256,6 @@ class PagamentoServiceTest {
 
     @Test
     void aprovacaoReconciliadaDuasVezesPublicaEfeitoDeNegocioUmaVez() throws Exception {
-        when(orderService.getOrderForUpdate(ORDER_ID)).thenReturn(order);
         when(pagamentoRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         when(orderService.save(any())).thenAnswer(call -> call.getArgument(0));
         String approved = webhook("processed", "accredited", "credit_card", "visa", 1, true);
@@ -253,10 +279,13 @@ class PagamentoServiceTest {
         existing.setIdOrder(ORDER_ID);
         existing.setStatus(OrderStatus.CREATED);
         existing.setCarrinho(carrinho);
+        existing.setPagamento(attempt(existing));
         existing.setMpOrderId("mp-order-1");
-        existing.setPagamento(new Pagamento(existing));
-        when(carrinhoService.getByIdForUpdate("cart-1")).thenReturn(carrinho);
-        when(orderService.criarCobranca(carrinho)).thenReturn(existing);
+        when(pointPaymentPersistenceService.prepare("cart-1"))
+                .thenReturn(new PointPaymentPersistenceService.PreparedAttempt(
+                        ORDER_ID, false, "mp-order-1"));
+        when(pointPaymentPersistenceService.current(ORDER_ID))
+                .thenReturn(PointPaymentResponse.from(existing));
 
         PointPaymentResponse first = pagamentoService.gerarCobranca("cart-1");
         PointPaymentResponse second = pagamentoService.gerarCobranca("cart-1");
@@ -264,7 +293,27 @@ class PagamentoServiceTest {
         assertThat(first.orderId()).isEqualTo(ORDER_ID);
         assertThat(second.status()).isEqualTo(
                 com.jefiro.app247.domain.model.enum_type.TerminalPaymentStatus.WAITING_PAYMENT);
-        verify(orderService, times(2)).criarCobranca(carrinho);
+        verify(pointPaymentPersistenceService, times(2)).prepare("cart-1");
+        verifyNoInteractions(submissionService);
+    }
+
+    @Test
+    void tentativaLocalEhPersistidaAntesDaChamadaRemotaEDoAceite() throws Exception {
+        var prepared = new PointPaymentPersistenceService.PreparedAttempt(
+                ORDER_ID, true, null);
+        PointPaymentResponse expected = new PointPaymentResponse(
+                "PAYMENT_STATUS", ORDER_ID, "terminal-1",
+                com.jefiro.app247.domain.model.enum_type.TerminalPaymentStatus.WAITING_PAYMENT,
+                OrderStatus.CREATED, null, null, "Aguardando pagamento");
+        when(pointPaymentPersistenceService.prepare("cart-1")).thenReturn(prepared);
+        when(submissionService.submitSameAttempt(ORDER_ID, "TERMINAL_REQUEST"))
+                .thenReturn(expected);
+
+        assertThat(pagamentoService.gerarCobranca("cart-1")).isSameAs(expected);
+
+        var sequence = inOrder(pointPaymentPersistenceService, submissionService);
+        sequence.verify(pointPaymentPersistenceService).prepare("cart-1");
+        sequence.verify(submissionService).submitSameAttempt(ORDER_ID, "TERMINAL_REQUEST");
     }
 
     @Test
@@ -279,23 +328,26 @@ class PagamentoServiceTest {
         existing.setIdOrder(ORDER_ID);
         existing.setStatus(OrderStatus.CREATED);
         existing.setCarrinho(carrinho);
+        existing.setPagamento(attempt(existing));
         existing.setMpOrderId("mp-order-1");
-        existing.setPagamento(new Pagamento(existing));
-        when(orderService.findByCarrinho("cart-1")).thenReturn(java.util.Optional.of(existing));
         doAnswer(call -> {
             existing.setStatus(OrderStatus.PROCESSED);
             existing.getPagamento().setStatus(PagamentoStatus.PROCESSED);
             return true;
         }).when(reconciliationService).reconcileOrder(ORDER_ID);
-        when(carrinhoService.getByIdForUpdate("cart-1")).thenReturn(carrinho);
-        when(orderService.criarCobranca(carrinho)).thenReturn(existing);
+        when(pointPaymentPersistenceService.prepare("cart-1"))
+                .thenReturn(new PointPaymentPersistenceService.PreparedAttempt(
+                        ORDER_ID, false, "mp-order-1"));
+        when(pointPaymentPersistenceService.current(ORDER_ID))
+                .thenAnswer(call -> PointPaymentResponse.from(existing));
 
         PointPaymentResponse response = pagamentoService.gerarCobranca("cart-1");
 
         assertThat(response.status()).isEqualTo(
                 com.jefiro.app247.domain.model.enum_type.TerminalPaymentStatus.APPROVED);
         verify(reconciliationService).reconcileOrder(ORDER_ID);
-        verify(orderService).criarCobranca(carrinho);
+        verify(pointPaymentPersistenceService).prepare("cart-1");
+        verifyNoInteractions(submissionService);
     }
 
     @Test
@@ -325,7 +377,6 @@ class PagamentoServiceTest {
             Integer installments,
             boolean includePayment
     ) throws Exception {
-        when(orderService.getOrderForUpdate(ORDER_ID)).thenReturn(order);
         when(pagamentoRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         when(orderService.save(any())).thenAnswer(call -> call.getArgument(0));
         pagamentoService.atualizarPagamento(
@@ -365,6 +416,15 @@ class PagamentoServiceTest {
                   "type":"order",
                   "user_id":"mp-user-1"
                 }
-                """.formatted(status, ORDER_ID, status, detail, transactions);
+                """.formatted(status, "attempt-local-1", status, detail, transactions);
+    }
+
+    private PaymentAttempt attempt(Order owner) {
+        PaymentAttempt attempt = new PaymentAttempt(owner);
+        attempt.setIdPagamento("attempt-" + owner.getIdOrder());
+        attempt.setAttemptNumber(1);
+        attempt.setExternalReference("attempt-" + owner.getIdOrder());
+        attempt.setIdempotencyKey("idem-" + owner.getIdOrder());
+        return attempt;
     }
 }

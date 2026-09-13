@@ -3,7 +3,11 @@ package com.jefiro.app247.infra.repository;
 import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.Empresa;
 import com.jefiro.app247.infra.service.UserService;
+import com.jefiro.app247.infra.security.SecurityIdentity;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.ManyToOne;
+import org.hibernate.Hibernate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,7 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -47,6 +51,23 @@ class UserRepositoryTest {
 
     }
 
+    @Test
+    void projecaoDeSegurancaRetornaEstadoSemInicializarEmpresa() throws Exception {
+        createUser();
+        entityManager.flush();
+        entityManager.clear();
+
+        SecurityIdentity identity = userRepository.findSecurityIdentityByCpf("12345678901").orElseThrow();
+
+        assertFalse(Hibernate.isInitialized(identity.user().getEmpresa()));
+        assertNotNull(identity.empresaId());
+        assertTrue(Boolean.TRUE.equals(identity.usuarioAtivo()));
+        assertTrue(Boolean.TRUE.equals(identity.empresaAtiva()));
+        assertNull(identity.empresaEncerradaEm());
+        assertEquals(FetchType.LAZY, User.class.getDeclaredField("empresa")
+                .getAnnotation(ManyToOne.class).fetch());
+    }
+
     private User createUser() {
         Empresa empresa = Empresa.builder()
                 .razaoSocial("Empresa Teste")
@@ -55,7 +76,7 @@ class UserRepositoryTest {
                 .email("empresa@email.com")
                 .tenantId("tenant-teste")
                 .ativo(true)
-                .dataCadastro(LocalDateTime.now())
+                .dataCadastro(Instant.now())
                 .build();
         entityManager.persist(empresa);
         User user = User.builder()

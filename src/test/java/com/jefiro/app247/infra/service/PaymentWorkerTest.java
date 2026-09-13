@@ -19,6 +19,7 @@ class PaymentWorkerTest {
     @Mock ListOperations<String, String> lists;
     @Mock ValueOperations<String, String> values;
     @Mock PagamentoService pagamentoService;
+    @Mock WebhookInboxService webhookInboxService;
     @InjectMocks PaymentWorker worker;
 
     @BeforeEach
@@ -35,6 +36,7 @@ class PaymentWorkerTest {
         worker.processQueue();
 
         verify(pagamentoService).atualizarPagamento(payload);
+        verify(webhookInboxService).markProcessedSafely(payload);
         verify(lists).remove(PaymentWorker.PROCESSING_QUEUE, 1, payload);
         verify(lists, never()).leftPush(PaymentWorker.DEAD_LETTER_QUEUE, payload);
     }
@@ -55,6 +57,7 @@ class PaymentWorkerTest {
 
         verify(lists, times(2)).leftPush(PaymentWorker.QUEUE, payload);
         verify(lists).leftPush(PaymentWorker.DEAD_LETTER_QUEUE, payload);
+        verify(webhookInboxService).markDeadLetterSafely(eq(payload), any(IllegalStateException.class));
         verify(lists, times(3)).remove(PaymentWorker.PROCESSING_QUEUE, 1, payload);
     }
 }

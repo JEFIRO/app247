@@ -3,6 +3,7 @@ package com.jefiro.app247.infra.controller;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jefiro.app247.infra.service.MercadoPagoWebhookSignatureService;
+import com.jefiro.app247.infra.service.WebhookInboxService;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,15 +22,18 @@ public class MercadoPagoWebhookController {
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
     private final MercadoPagoWebhookSignatureService signatureService;
+    private final WebhookInboxService inboxService;
 
     public MercadoPagoWebhookController(
             RedisTemplate<String, String> redisTemplate,
             ObjectMapper objectMapper,
-            MercadoPagoWebhookSignatureService signatureService
+            MercadoPagoWebhookSignatureService signatureService,
+            WebhookInboxService inboxService
     ) {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
         this.signatureService = signatureService;
+        this.inboxService = inboxService;
     }
 
 
@@ -63,7 +67,25 @@ public class MercadoPagoWebhookController {
             return ResponseEntity.badRequest().body("data.id da URL difere do payload");
         }
 
-        String deduplicationKey = "mp_webhook:" + action + ':' + bodyDataId + ':' + version;
+        Integer numericVersion = null;
+        if (!"unknown".equals(version)) {
+            try {
+                numericVersion = Integer.valueOf(version);
+            } catch (NumberFormatException ignored) {
+                return ResponseEntity.badRequest().body("Versão do webhook inválida");
+            }
+        }
+        String bodyJson = objectMapper.writeValueAsString(body);
+        WebhookInboxService.Registration registration = inboxService.register(
+                action, bodyDataId, numericVersion, bodyJson);
+        if (!registration.created()
+                && !"RECEIVED".equals(registration.event().getProcessingStatus())) {
+            log.info("Webhook Point duplicado no inbox: action={}, mpOrderId={}, version={}",
+                    action, bodyDataId, version);
+            return ResponseEntity.ok("DUPLICADO");
+        }
+
+        String deduplicationKey = "mp_webhook:" + registration.event().getEventId();
         Boolean firstReceipt = redisTemplate.opsForValue().setIfAbsent(
                 deduplicationKey,
                 "received",
@@ -75,9 +97,9 @@ public class MercadoPagoWebhookController {
             return ResponseEntity.ok("DUPLICADO");
         }
 
-        String bodyJson = objectMapper.writeValueAsString(body);
         try {
             redisTemplate.opsForList().leftPush("mp_queue", bodyJson);
+            inboxService.markQueued(registration.event().getEventId());
             log.info("Webhook Point recebido e enfileirado: action={}, mpOrderId={}, version={}",
                     action, bodyDataId, version);
         } catch (RuntimeException e) {
