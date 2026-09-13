@@ -3,11 +3,12 @@ name: Build and Deploy App247
 on:
   push:
     branches:
-      - main
+      - master
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
+    environment: DOCKERHUB_USERNAME
 
     steps:
       - name: Checkout
