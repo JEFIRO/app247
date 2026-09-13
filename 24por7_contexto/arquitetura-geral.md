@@ -4,6 +4,10 @@ Voltar para [[00-index]]. Inventário em [[mapa-projeto]], contratos em [[api]] 
 
 ## Visão de execução
 
+O módulo de promoções segue `Flutter → PromocaoService → PricingService → Product Sync → Terminal → Carrinho/Order → Mercado Pago`. `EstoqueCondominio` continua definindo disponibilidade. Eventos de catálogo separam a transação da notificação WebSocket `AFTER_COMMIT`, enquanto o sync incremental é a recuperação durável.
+
+Inventário segue `Flutter → InventarioService → snapshot/lock do estoque → MovimentacaoEstoque + AuditLog`. Importação segue `Flutter → validação XLSX/preview → evento AFTER_COMMIT → processador assíncrono → transação por Produto`; nenhum dos dois cria uma segunda implementação de Produto ou estoque.
+
 ```text
 Aplicativo / Terminal / Painel administrativo / Mercado Pago
                          |
@@ -39,6 +43,7 @@ Spring Boot
 │   ├── v1/orders
 │   └── SDK para PIX/Checkout Pro não exposto
 ├── SMTP Gmail
+├── Apache POI (modelo e leitura XLSX não confiável)
 ├── filesystem local uploads/
 └── WebSocket nativo + STOMP
 ```
@@ -52,13 +57,15 @@ Empresa
 ├── Users
 ├── MercadoPagoConta (0..1)
 ├── Produtos
+│   ├── ProdutoCodigoBarras
+│   └── ProdutoFiscal
 └── Condomínios
     ├── Terminais
     └── EstoqueCondominio
         └── Produto da mesma Empresa
 ```
 
-Não há filtro Hibernate global. O isolamento é aplicado manualmente em services/repositories. Empresa, condomínio, terminal, produto e estoque administrativos usam consultas compostas ou `EmpresaContext`. Carrinho valida o tenant quando o contexto existe e deriva a empresa do terminal quando não existe; usuários, Orders e sessões ainda possuem caminhos globais por ID.
+Não há filtro Hibernate global. A autorização continua em services/repositories e `EmpresaContext`, enquanto o schema reforça as relações críticas com `empresa_id` controlado e FKs compostas. Terminal deriva o tenant exclusivamente por Condomínio; carrinho, venda, estoque, promoção e pagamento não aceitam combinações cross-tenant no banco.
 
 ## Fluxo de autenticação
 
@@ -106,12 +113,13 @@ POST /carrinho
   -> Terminal por ID
   -> empresa = terminal.condominio.empresa
   -> produtos validados nessa empresa
-  -> Item snapshots + subtotal
-  -> Carrinho OPEN e Items por cascade
+  -> CartItem mutável + subtotal preciso
+  -> Carrinho OPEN
 
 GET /order/finalizar ou POST /pagamento/terminal/{carrinho}
   -> valida itens, snapshots, subtotal positivo e tenant do carrinho
   -> Order única por carrinho
+  -> OrderItem recebe snapshot imutável
   -> Carrinho READY_FOR_PAYMENT
   -> OrderReservadaEvent síncrono
   -> EstoqueService.reservar
@@ -121,13 +129,13 @@ GET /order/finalizar ou POST /pagamento/terminal/{carrinho}
 
 Início de cobrança
   -> lock pessimista do Carrinho
-  -> reutiliza Order/cobrança existente em clique repetido
+  -> Transação A: cria/reutiliza Order + PaymentAttempt PENDING
   -> Carrinho PAYMENT_PENDING
-  -> MercadoPagoCobrancaEvent síncrono
+  -> commit local antes da integração
   -> credencial: Order.empresa -> MercadoPagoConta
   -> maquininha: Order.idTerminal -> Terminal.mercadoPagoTerminalId
-  -> POST Mercado Pago /v1/orders
-  -> Pagamento + dados MP na Order
+  -> POST Mercado Pago /v1/orders fora da transação
+  -> Transação B: IDs/status remoto na mesma PaymentAttempt
   -> response WAITING_PAYMENT para o Terminal
 
 Webhook
@@ -137,7 +145,8 @@ Webhook
   -> PaymentWorker move para mp_queue:processing
   -> PagamentoService @Transactional
   -> lock da Order + versão externa + máquina de estados
-  -> atualiza Order/Pagamento/Carrinho
+  -> localiza PaymentAttempt por provider + externalReference
+  -> atualiza PaymentAttempt/Order/Carrinho e anexa PaymentEvent
   -> confirma processamento ou faz retry limitado/DLQ
   -> evento síncrono de estoque
        processed: VENDA delta zero
@@ -151,16 +160,17 @@ Reconexão
   -> lê estado persistido; não cria nova cobrança
 ```
 
-Order não possui coleção própria de snapshots. O histórico depende dos itens do carrinho, mas não existem endpoints atuais para editar carrinho depois da criação e o status impede novo checkout pelo service.
+Order possui `OrderItem` próprio e imutável; o histórico não depende mais de `CartItem` ou do cadastro atual do Produto. Uma Order possui várias `PaymentAttempt`, embora o fluxo atual ainda inicie apenas a primeira.
 
 ## Eventos e consistência transacional
 
 - `OrderReservadaEvent`, `OrderPaidEvent`, `OrderNotCompletedEvent` e `CompraCanceladaEvent` são síncronos com `@EventListener`.
 - Os métodos de estoque são transacionais e participam da transação publicadora quando chamados por proxy.
-- `MercadoPagoCobrancaEvent` também é síncrono; a chamada HTTP acontece dentro do fluxo transacional de cobrança.
+- A criação Point usa duas transações locais `REQUIRES_NEW`; a chamada HTTP ocorre entre elas e nunca dentro de callback `afterCompletion`.
 - `UserCreatedEvent` é assíncrono e envia SMTP sem fila Redis.
 - `PaymentEvent` é publicado pelo webhook quando o estado muda; listeners nativo/STOMP executam após commit.
 - `ProdutoCatalogChangedEvent` é publicado por alterações globais do produto e por associação/desassociação no condomínio. `ProdutoCatalogNotificationService` o consome em `AFTER_COMMIT`, resolve os Terminais somente dos condomínios capturados no evento e envia `PRODUCT_SYNC_REQUIRED` pelo socket nativo já existente.
+- `ImportacaoProdutoSolicitadaEvent` é publicado após a confirmação local e consumido de forma assíncrona somente depois do commit. Cada Produto fica isolado em `REQUIRES_NEW`, evitando uma transação de milhares de linhas.
 
 ## Redis e workers
 
@@ -193,16 +203,17 @@ O canal `/payment-socket/{terminalId}` também transporta invalidação de catá
 
 ## Persistência e evolução
 
-Hibernate está configurado como `ddl-auto=update` em dev e produção, simultaneamente ao Flyway. Isso reduz a confiabilidade das migrations como representação exclusiva do schema. Há divergências entre JPA e SQL e modificações locais em migrations históricas; detalhes em [[banco-de-dados]] e [[auditoria-bugs]].
+Hibernate usa `ddl-auto=validate` em desenvolvimento integrado e produção. Flyway é a fonte única do schema; a baseline atual possui dez migrations e precisa de banco vazio. Veja [[database]] e [[database-er]].
 
 ## Tratamento de erros
 
-`RestExceptionHandler` cobre algumas exceções de usuário, senha, códigos, tokens, tenant e terminal. `IllegalArgumentException`, `IllegalStateException`, erros de integridade, IO e boa parte dos erros externos não possuem contrato específico. Diversos services capturam `Exception` e relançam `RuntimeException`, removendo a classificação original.
+`RestExceptionHandler` cobre exceções de usuário, senha, códigos, tokens, tenant, terminal, argumentos inválidos e conflitos de estado. Erros de integridade, IO e parte dos erros externos ainda não possuem contrato específico. Diversos services capturam `Exception` e relançam `RuntimeException`, removendo a classificação original.
 
 ## Observabilidade atual
 
+- O heartbeat renova `terminal:online:{uuid}` no Redis e usa `lastPing` como fallback. A telemetria HTTP independente persiste projeção atual, histórico com retenção e alertas deduplicados. `TelemetryMaintenanceJobs` calcula OFFLINE pelo heartbeat; o Flutter usa DTOs filtrados por `EmpresaContext`. Veja [[telemetria]].
 - Actuator está no classpath, sem métricas de negócio implementadas.
 - Catálogo e sync possuem logs estruturados `[PRODUCT-CATALOG]` e `[PRODUCT-SYNC]`; ainda há saídas diretas em outras áreas legadas.
 - Não existe correlation ID configurado.
-- O ID local da Order é `external_reference` e `X-Idempotency-Key`, o que permite correlação manual com Mercado Pago.
+- Cada `PaymentAttempt` persiste `external_reference` e `X-Idempotency-Key`, permitindo correlação e retries futuros sem reutilizar tentativas encerradas.
 - Não há métricas para fila, retries, latência externa, webhooks ou estoque negativo.

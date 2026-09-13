@@ -6,7 +6,7 @@ Voltar para [[00-index]]. Persistência em [[banco-de-dados]], segurança em [[a
 
 O código está sob `com.jefiro.app247`:
 
-- `domain.model`: entidades JPA (`Empresa`, `Condominio`, `Produto`, `Carrinho`, `Item`, `Order`, `Pagamento`, `MercadoPagoConta`, `WebhookEvent` e `GrupoTributario`);
+- `domain.model`: entidades JPA de tenant, catálogo/fiscal, estoque, promoção, carrinho/venda, `PaymentAttempt`/`PaymentEvent`, telemetria e auditoria;
 - `domain.model.auth`: `User`, `Endereco` e `RoleUser`;
 - `domain.model.terminal`: entidade `Terminal`;
 - `domain.model.dto`: contratos REST, objetos de sessão e respostas;
@@ -31,9 +31,9 @@ Não há separação por interfaces de casos de uso ou adaptadores: controllers 
 | Onboarding | `OnboardingController`, `OnboardingService` | Cria empresa, gestor `ADMIN`, primeiro condomínio e primeiro terminal em uma transação. |
 | Gestão da empresa | `EmpresaService`, `CondominioService`, `TerminalService` | Opera recursos do tenant usando `EmpresaContext` e consultas compostas por empresa. |
 | Catálogo | `ProdutoController`, `ProdutoService`, `ProdutoSyncService` | CRUD parcial, paginação, sync por Terminal usando timestamps de produto/disponibilidade, invalidação WebSocket após commit, destaques e upload JPG/JPEG. |
-| Compra | `CarrinhoService`, `OrderService` | Materializa itens a partir de produtos, calcula subtotal e cria pedido. |
+| Compra | `CarrinhoService`, `OrderService` | Materializa `CartItem`, calcula com precisão e congela `OrderItem` ao criar a venda. |
 | Checkout temporário | `CheckoutSessionService`, repository Redis | Sessão de 15 minutos, consulta de carrinho, vínculo de usuário e QR Code. |
-| Pagamento Point | `PagamentoService`, `MercadoPagoCobrancaService` | Cria order local, dispara evento interno e chama `/v1/orders` do Mercado Pago. |
+| Pagamento Point | `PagamentoService`, `PointPaymentPersistenceService`, `MercadoPagoCobrancaService` | Confirma a tentativa local, chama `/v1/orders` fora da transação e persiste a aceitação em nova transação. |
 | Webhook | controller, validador HMAC, Redis `mp_queue`, `PaymentWorker` | Autentica, deduplica, enfileira, consulta dados faltantes e atualiza pedido/pagamento. |
 | Identidade | `UserService`, `TokenService`, filtro de segurança | BCrypt, login por CPF, JWT e códigos temporários no Redis. |
 | Terminal | `TerminalService`, WebSocket handler | Ativação por serial, heartbeat/status e marcação periódica como offline. |
@@ -68,15 +68,17 @@ Os tipos exatos de request/response são definidos pelos DTOs. As rotas administ
 
 ### Cadastro completo
 
-`OnboardingController` entrega `CadastroCompletoRequest` a `OnboardingService.executar`, método transacional. A empresa é persistida; o gestor é associado a ela, recebe papel `ADMIN` e senha BCrypt; endereço e condomínio são persistidos com `empresa_id`; o gestor recebe o condomínio inicial; e o terminal é persistido apenas com `condominio_id`. Uma falha propaga a exceção e reverte a transação relacional.
+`OnboardingController` entrega `CadastroCompletoRequest` a `OnboardingService.executar`, método transacional. A empresa é persistida; o gestor é associado a ela e recebe papel `ADMIN` e senha BCrypt; `CondominioService.salvarNovo` persiste explicitamente o endereço antes do condomínio (a relação não usa cascade); o gestor recebe o condomínio inicial; e o terminal é persistido apenas com `condominio_id`. Uma falha propaga a exceção e reverte toda a transação relacional.
 
 O JSON novo usa `gestor`; Jackson também aceita o nome legado `user`. A criação posterior de condomínios e terminais pertence aos services específicos.
 
 ### Carrinho e pedido
 
-Ao criar um carrinho, o terminal determina condomínio e empresa. Cada `ItemRequest` busca produto nessa empresa, copia código, nome, preço, peso e foto e nasce como `VALIDATED`. Quantidade não positiva e produto duplicado são rejeitados. O subtotal é preço vezes quantidade e os itens são persistidos por cascade.
+Ao criar um carrinho, o Terminal determina condomínio e empresa. Cada `ItemRequest` busca produto/código nessa empresa, cria um `CartItem` com quantidade `BigDecimal` e nasce como `VALIDATED`. Quantidade não positiva e produto duplicado são rejeitados. Ao criar a Order, cada Produto referenciado pelo carrinho é recarregado integralmente por ID e empresa; então cada item é copiado para um `OrderItem` histórico. O snapshot exige SKU, nome, unidade, quantidade e valores monetários completos, e alterações posteriores no carrinho ou Produto não alteram a venda.
 
 `createOrder` exige carrinho `OPEN`, impede segunda Order por consulta e constraint, muda o carrinho para `READY_FOR_PAYMENT`, cria a Order e publica reserva síncrona de estoque. O endpoint não fornece usuário, portanto o pedido dessa rota nasce sem usuário.
+
+No início Point, `PointPaymentPersistenceService` cria a tentativa local em transação própria e bloqueia também a linha do Terminal, garantindo uma única Order intermediária por equipamento. `PointPaymentSubmissionService` faz a chamada externa fora dessa transação, serializa a mesma Order na instância e sempre reutiliza a chave idempotente persistida. `PaymentReconciliationService` é a única entrada para scheduler, startup e consultas HTTP; também recupera submissões `PENDING` cujo ID remoto ainda é desconhecido. Veja [[payment-recovery]].
 
 ### Processamento assíncrono
 
@@ -90,11 +92,20 @@ O agendamento é habilitado em `App247Application`. A cada dois segundos, worker
 - `@EnableAsync` ativa listeners assíncronos, especialmente e-mail e publicação STOMP.
 - OpenAPI/Swagger é fornecido por Springdoc e a raiz redireciona para a UI.
 
+## Execução com Docker Compose
+
+O `Dockerfile` usa build multi-stage com Maven e uma imagem final JRE 17. A aplicação roda como usuário sem privilégios, expõe `8080`, grava arquivos no volume `/app/uploads` e possui health check em `/actuator/health`.
+
+O `docker-compose.yml` sobe API, MySQL 8.4 e Redis 8. A API aguarda os health checks dos dois serviços de dados; banco, Redis e uploads usam volumes separados. As portas de MySQL e Redis são publicadas somente em `127.0.0.1`, enquanto a porta HTTP pode ser configurada por `APP_PORT`.
+
+O MySQL usa o volume `mysql_data_v2`, intencionalmente novo por causa da substituição da cadeia histórica pela baseline V1–V11. Um volume `mysql_data` criado pelo Compose anterior não é apagado automaticamente, mas também não pode ser reutilizado diretamente com a nova cadeia Flyway.
+
+As credenciais e integrações são recebidas por variáveis locais. Para executar, copie `.env.example` para `.env`, substitua os valores `change-me` e use `docker compose up --build`. O arquivo `.env` é ignorado pelo Git e não entra no contexto de build.
+
 ## Limitações arquiteturais verificadas
 
-- O isolamento foi imposto em empresa, condomínio, terminal, produto e estoque, mas ainda não é transversal a usuário, carrinho e Order; veja [[autenticacao]].
-- `CondominioRepository` e `TerminalRepository` usam IDs `String`. `EnderecoRepository` ainda declara `Long` para um ID `String`, fora do fluxo refatorado.
-- Há dois canais de pagamento WebSocket em paralelo, mas o fluxo ativo não publica seu evento.
+- O schema impõe tenant por FKs compostas nos agregados críticos; a autorização HTTP continua dependendo de `EmpresaContext` e deve permanecer coberta nos services.
+- `CondominioRepository`, `TerminalRepository` e `EnderecoRepository` usam IDs UUID textuais representados por `String`.
+- Há dois canais de pagamento WebSocket em paralelo; ambos recebem o mesmo evento após commit, e o endpoint HTTP é o fallback de recuperação.
 - Exceções são frequentemente encapsuladas em `RuntimeException`, o que pode ocultar o tipo tratado pelo `RestExceptionHandler`.
-- A deduplicação de webhook expira após 24 horas e não mantém histórico permanente.
-- O worker de webhook ainda não possui backoff ou dead-letter queue.
+- A deduplicação operacional usa Redis e `webhook_event` mantém o inbox auditável com retenção configurada.

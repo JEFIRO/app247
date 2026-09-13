@@ -9,11 +9,11 @@ O App 24/7 é uma API Spring Boot para operação de compras associadas a empres
 O fluxo comercial observado é:
 
 1. Produtos são cadastrados no catálogo da empresa; a quantidade disponível fica em `EstoqueCondominio`.
-2. Um terminal envia itens e cria um `Carrinho`; o backend valida terminal e produtos na mesma empresa e cada item preserva dados e preço da venda.
-3. O carrinho origina no máximo uma `Order`; sua criação fecha o carrinho e reserva o estoque do condomínio do terminal.
+2. Um terminal envia itens e cria um `Carrinho` com `CartItem` mutável; o backend valida Terminal, códigos e produtos na mesma empresa.
+3. O carrinho origina no máximo uma `Order`; `OrderItem` recebe um snapshot histórico independente e a criação reserva o estoque do condomínio do terminal.
 4. Para cobrança Point, o backend obtém a credencial em `Empresa -> MercadoPagoConta` e a maquininha em `Carrinho/Order -> Terminal -> mercadoPagoTerminalId`.
 5. Webhooks têm assinatura HMAC validada, são deduplicados e enfileirados no Redis para um worker com fila intermediária, retry limitado e DLQ.
-6. O status recebido é aplicado com lock, versão persistida e máquina de estados; a aprovação finaliza Order/Pagamento/Carrinho e listeners confirmam ou liberam a reserva de forma idempotente.
+6. O status recebido é aplicado à `PaymentAttempt` exata com lock, versão persistida e máquina de estados; a aprovação finaliza tentativa/Order/Carrinho e listeners confirmam ou liberam a reserva de forma idempotente. Uma Order pode conservar várias tentativas encerradas.
 
 Também existe um fluxo de sessão de checkout: uma sessão temporária é armazenada no Redis por 15 minutos e pode ser codificada como `app247://session/{sessionId}` em um QR Code. O código permite associar um `userId` à sessão, mas não altera seu status nem a converte automaticamente em pedido.
 
@@ -32,7 +32,7 @@ Não há código dos clientes neste repositório, portanto seus comportamentos a
 - Spring Boot 4.0.6;
 - Spring MVC, Validation, JPA/Hibernate e Spring Security;
 - JWT com `java-jwt` e assinatura HMAC256;
-- MySQL em produção e H2 no perfil de desenvolvimento;
+- MySQL em desenvolvimento integrado e produção; H2 fica restrito aos testes unitários rápidos;
 - Flyway com migrations MySQL;
 - Redis para sessões temporárias, códigos/tokens e filas;
 - WebSocket nativo e STOMP com broker simples em memória;
@@ -54,7 +54,7 @@ O terminal não possui associação direta com empresa; seu tenant é obtido por
 
 Cada empresa possui no máximo uma `MercadoPagoConta`, exclusiva para credenciais OAuth. A identificação da maquininha física não pertence à conta: cada `Terminal` interno pode guardar seu próprio `mercadoPagoTerminalId`, único globalmente. Veja [[decisoes/002-credenciais-e-terminais-mercado-pago]].
 
-O JWT carrega `empresaId`, e o filtro coloca `user.empresa.id` em `EmpresaContext`, limpo ao fim da requisição. As APIs administrativas permanecem públicas temporariamente na camada HTTP; quando recebem contexto, seus services usam consultas compostas por recurso e empresa, impedindo operar um ID pertencente a outro tenant.
+O JWT carrega `userId` e `empresaId`. O filtro compara esses claims com uma projeção de segurança que consulta o usuário e o estado atual da Empresa sem inicializar a associação JPA `LAZY`; somente então coloca o ID escalar em `EmpresaContext`, sempre limpo ao fim da requisição. As APIs administrativas permanecem públicas temporariamente na camada HTTP; quando recebem contexto, seus services usam consultas compostas por recurso e empresa, impedindo operar um ID pertencente a outro tenant.
 
 Produtos e estoque administrativos são filtrados pela empresa de `EmpresaContext`. Na criação do carrinho, a empresa é derivada do terminal e todos os produtos são validados contra ela. A área legada de usuário ainda possui operações que não seguem consultas tenant-aware em todos os caminhos.
 
@@ -69,6 +69,6 @@ Produtos e estoque administrativos são filtrados pela empresa de `EmpresaContex
 
 ## Configuração operacional
 
-O servidor usa a porta da variável `PORT`, com padrão `8080`. Produção recebe MySQL e Redis por variáveis de ambiente e usa `ddl-auto=validate`; desenvolvimento aponta para H2 em arquivo e habilita o console H2. Não há perfil ativo definido no arquivo base.
+O servidor usa a porta da variável `PORT`, com padrão `8080`. Desenvolvimento integrado e produção recebem MySQL e Redis por variáveis de ambiente e usam `ddl-auto=validate`; Flyway é a única fonte do schema. Não há perfil ativo definido no arquivo base.
 
 JWT, banco, SMTP e Mercado Pago são configurados por variáveis de ambiente; não há mais credenciais produtivas literais nos arquivos atuais. Valores que já apareceram no histórico ainda precisam ser rotacionados externamente.

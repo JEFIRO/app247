@@ -1,4 +1,6 @@
-# Banco de dados
+# Banco de dados legado (histórico V1–V26)
+
+> Este inventário descreve a cadeia removida. O schema executável atual está em [[database]] e [[database-er]].
 
 Voltar para [[00-index]]. Visão dos fluxos em [[arquitetura]] e dados de autenticação em [[autenticacao]].
 

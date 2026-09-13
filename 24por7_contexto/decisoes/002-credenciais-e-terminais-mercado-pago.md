@@ -40,5 +40,11 @@ As rotas antigas de início/listagem com `idUser` permanecem temporariamente com
 - Uma empresa pode operar várias maquininhas em vários condomínios.
 - Credenciais e identificação física têm ciclos de vida independentes.
 - A mesma maquininha não pode ser vinculada a dois terminais internos.
-- Contas duplicadas existentes impedem V19; devem ser saneadas sem apagar tokens automaticamente.
+- A baseline nova impõe uma conta por empresa e uma Point por Terminal. Como o reset é destrutivo, dados que precisem sobreviver devem ser exportados e saneados antes da recriação, sem expor tokens.
 - O access token expira e a data é persistida, mas refresh automático continua não implementado.
+
+## Evolução do lifecycle (V12)
+
+A separação original foi mantida e recebeu histórico em `terminal_point_binding`. `MercadoPagoConta` deixou de ser 1:1 definitivo: cada linha é um vínculo histórico. A projeção `mercado_pago_conta_ativa`, cuja PK é o `user_id` do OAuth, implementa a exclusividade ativa e permite reutilização após `UNLINKED`. Detalhes e proteção concorrente estão em [[../mercado-pago-account-lifecycle]].
+
+Desvincular Mercado Pago limpa somente a camada de pagamento; encerramento definitivo da Empresa solicita `FACTORY_RESET_APPLICATION` durável dos Terminais. Ver [[../terminal-lifecycle]].

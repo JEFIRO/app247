@@ -1,86 +1,92 @@
-# Estoque por condomínio
+# Estoques, transferências e planograma
 
-Voltar para [[00-index]]. Relações físicas em [[banco-de-dados]] e estados externos em [[mercado-pago]].
+Voltar para [[00-index]]. Schema em [[database]], sync em [[sincronizacao-produtos]] e auditoria em [[audit-log]].
 
-## Modelo implementado
-
-```text
-Empresa
-├── Produto (catálogo)
-└── Condominio
-    ├── Terminal
-    └── EstoqueCondominio
-        └── Produto
-```
-
-`Produto` pertence a uma empresa e não guarda quantidade. `EstoqueCondominio` associa um produto a um condomínio, contém quantidade decimal, `ativo`, `createdAt` e `updatedAt`, e possui unicidade `(condominio_id, produto_id)`. Produto e condomínio precisam pertencer à mesma empresa.
-
-Disponibilidade não depende de saldo positivo: inclusive `quantidade=-1` com `ativo=true` continua disponível. A disponibilidade de catálogo exige somente associação ativa e produto global ativo.
-
-Para o Terminal, a seleção é sempre `Terminal -> Condomínio -> EstoqueCondominio -> Produto`. Produto existente apenas na Empresa não aparece sem associação no condomínio. Consequentemente, FULL SYNC vazio é estado válido quando não há vínculos, e não deve ser confundido com falha HTTP.
-
-O saldo geral da empresa não é persistido separadamente. `EstoqueCondominioRepository` calcula `SUM(quantidade) GROUP BY produto` no banco.
-
-## Carrinho e snapshot
-
-O carrinho possui relação obrigatória com `Terminal`. Sua empresa é derivada e validada pela cadeia `Terminal -> Condominio -> Empresa`. Todos os produtos enviados precisam pertencer a essa empresa e produtos duplicados na mesma criação são rejeitados.
-
-`Item` possui FK para `Produto`, FK para `Carrinho`, quantidade e snapshots de código, nome, foto, preço unitário e unidade de medida. Assim mudanças posteriores no catálogo não alteram os dados básicos ou subtotal já armazenados. `Carrinho.addItem/removeItem` mantém os dois lados da associação. Uma constraint garante no máximo uma Order por carrinho, e o service rejeita checkout de carrinho que não esteja `OPEN`.
-
-Na fronteira do pagamento, o backend recalcula `sum(unitPrice * quantity)` a partir dos snapshots persistidos. Carrinho vazio, item sem produto/preço/quantidade, subtotal divergente ou associação de empresa inconsistente é rejeitado antes da Order, reserva e cobrança Point. Essa checagem complementa Bean Validation do request e protege chamadas internas que não passam pelo controller.
-
-Quando `EmpresaContext` existe, criação e consulta de carrinho validam a empresa derivada de `Terminal -> Condominio -> Empresa`. Sem contexto, necessário aos fluxos de terminal ainda abertos durante desenvolvimento, nenhuma empresa é inventada: ela é derivada do terminal persistido.
-
-## Ciclo de movimentação
+## Regra de domínio
 
 ```text
-Carrinho aberto
-   -> criação da Order
-   -> RESERVA (reduz saldo)
-   -> pagamento processado
-      -> VENDA (confirma; delta zero)
-   -> cancelado/falhou/expirou
-      -> LIBERACAO_RESERVA ou CANCELAMENTO (recompõe saldo)
+Produto
+├── EstoqueEmpresa
+│   └── Planograma (organização opcional)
+│   └── Inventario (contagem física)
+└── EstoqueCondominio
+
+EstoqueEmpresa
+    │ TransferenciaEstoque
+    ▼
+EstoqueCondominio
 ```
 
-A reserva permite saldo negativo. Cada saldo negativo é persistido normalmente e gera log `WARN`; não há exceção de estoque insuficiente.
+- `Produto` é catálogo e não possui saldo.
+- `EstoqueEmpresa` é a quantidade fisicamente presente no estoque central da Empresa.
+- `EstoqueCondominio` é a quantidade fisicamente presente no mercado daquele Condomínio.
+- `TransferenciaEstoque` é a operação logística controlada entre localizações.
+- `MovimentacaoEstoque` é o histórico imutável de todo efeito sobre saldo.
+- `Planograma` é a localização/organização física opcional no central; capacidade de posição nunca é saldo.
+- `Inventario` congela o saldo e transforma divergências confirmadas em movimentos auditáveis.
 
-Uma venda aprovada não desconta pela segunda vez. Uma Order sem reserva não recebe devolução. Reembolso/cancelamento libera a quantidade reservada uma única vez.
+O estoque total sob gestão pode ser calculado como central mais condomínios, mas não substitui nem mistura os saldos físicos.
 
-## Idempotência e concorrência
+## Estoque central
 
-Cada efeito por item usa chave única:
+`estoque_empresa` possui uma linha por `(empresa_id, produto_id)`, quantidade `DECIMAL(15,3)`, ativo e versão otimista. A primeira operação pode criar a linha com saldo zero. Assim, Produto pode existir sem estoque central e a UI oferece o catálogo para iniciar uma entrada.
 
-- `{order}:{item}:RESERVA`;
-- `{order}:{item}:VENDA`;
-- `{order}:{item}:LIBERACAO`.
+Entrada, saída e ajuste absoluto sempre geram movimento assinado com saldo anterior/posterior e AuditLog. A política existente permanece: saldo negativo é válido e não é usado como disponibilidade.
 
-`movimentacao_estoque.chave_idempotencia` possui `UNIQUE`, protegendo contra reentregas e concorrência além da deduplicação temporária do Redis. O saldo é carregado com `PESSIMISTIC_WRITE` dentro de transação, serializando vendas simultâneas do mesmo produto no mesmo condomínio.
+Consultas administrativas são paginadas e aceitam nome, SKU, barcode, categoria, ativo e ordenação. Alterações somente no central não disparam Product Sync.
 
-A movimentação de quantidade (`ENTRADA`, `AJUSTE`, `RESERVA`, `VENDA`, liberação ou cancelamento) não altera `EstoqueCondominio.updatedAt` e não dispara sync de catálogo. Quantidade tem ciclo próprio e não deve causar uma invalidação para cada venda.
+## Estoque por condomínio e checkout
 
-Alterações de disponibilidade usam `EstoqueCondominio.alterarDisponibilidade`, atualizam `updatedAt` em UTC e publicam `ProdutoCatalogChangedEvent`. A entrega ao Terminal ocorre somente em `AFTER_COMMIT`; rollback não envia mensagem. Terminal desconectado recupera as mudanças persistidas por `GET /produtos/sync`.
+`EstoqueCondominio` continua sendo a fonte da disponibilidade do Terminal. `ativo=true` disponibiliza; `quantidade > 0` não é requisito. A unicidade é `(condominio_id, produto_id)` e FKs compostas garantem Produto e Condomínio da mesma Empresa.
 
-## APIs administrativas
+O fluxo de venda permanece: criação da Order gera `RESERVA`, aprovação gera `VENDA` com delta zero, falha/cancelamento gera liberação idempotente. Quantidades são fracionadas e negativas continuam permitidas.
 
-- `GET /condominios/{condominioId}/estoque` — estoque do condomínio autenticado;
-- `POST /condominios/{condominioId}/estoque` — disponibiliza produto e registra entrada inicial;
-- `POST /condominios/{condominioId}/estoque/{produtoId}/entrada` — acrescenta quantidade;
-- `PUT /condominios/{condominioId}/estoque/{produtoId}` — ajuste para saldo absoluto;
-- `DELETE /condominios/{condominioId}/estoque/{produtoId}` — soft delete da disponibilidade e tombstone para sync;
-- `GET /condominios/{condominioId}/estoque/movimentacoes` — auditoria cronológica do condomínio;
-- `GET /estoque/geral` — soma por produto na empresa autenticada.
+## Ledger único
 
-As rotas estão públicas temporariamente na camada HTTP. IDs de empresa não são aceitos no body; as operações continuam dependendo do tenant presente em `EmpresaContext`.
+`movimentacao_estoque` foi generalizada na V9 e recebeu referências de inventário na V10. Cada registro aponta exatamente para uma localização por meio do `CHECK ck_movimento_local_unico`:
 
-## Migração V20
+- `estoque_empresa_id`; ou
+- `estoque_condominio_id`.
 
-V20 cria `estoque_condominio` e `movimentacao_estoque`, adiciona as FKs `item.id_produto` e `carrinho.id_terminal`, torna `orders.id_carrinho` único e remove `produto.quantidade`.
+O campo `quantidade` é delta assinado: entradas positivas, saídas negativas e venda confirmada zero. Order/OrderItem continuam opcionais para movimentos comerciais; `transferencia_id` correlaciona os lados logísticos e `created_by` identifica o responsável quando a operação veio de uma sessão administrativa. Chaves de idempotência são únicas por Empresa.
 
-O saldo antigo só é migrado automaticamente quando a empresa possui exatamente um condomínio. Para empresas com mais de um condomínio não há destino comprovável, portanto a migration não duplica nem distribui o valor legado.
+## Transferências
 
-O campo `quantidade` permanece temporariamente opcional em `CreateProductDTO` apenas para desserializar clientes antigos; ele está depreciado e não altera estoque. Estoque inicial deve ser cadastrado pela API do condomínio.
+A primeira versão implementa somente `ESTOQUE_EMPRESA → CONDOMINIO` e usa estados `RASCUNHO`, `CONCLUIDA` e `CANCELADA`. Estados de trânsito não foram criados porque ainda não existe workflow operacional que os sustente.
 
-## Migração V24
+Confirmação:
 
-V24 acrescenta `created_at` e `updated_at` com microssegundos a `estoque_condominio`, aumenta a precisão dos timestamps de `produto` para microssegundos e cria índices para as janelas incrementais. A remoção lógica mantém a linha e permite que o Terminal receba `REMOVE`; exclusão física direta não faz parte do caso de uso suportado porque eliminaria o tombstone.
+1. bloqueia a transferência;
+2. valida Empresa, direção, Condomínio e produtos;
+3. bloqueia os saldos em ordem determinística de Produto;
+4. debita o central;
+5. cria ou incrementa o estoque do condomínio;
+6. grava `SAIDA_TRANSFERENCIA` e `ENTRADA_TRANSFERENCIA`;
+7. marca a transferência concluída e audita;
+8. publica o evento de catálogo, entregue ao Terminal somente em `AFTER_COMMIT`.
+
+Tudo ocorre em uma única transação. Qualquer falha no destino reverte débito, crédito, movimentos e status. Confirmar novamente uma transferência concluída não repete os efeitos. Condomínio sem associação recebe `EstoqueCondominio ativo=true`, decisão necessária para que o produto transferido se torne disponível; associação inativa também é reativada.
+
+Cancelar um rascunho não altera saldos. Transferência concluída não é apagada nem reescrita; um futuro estorno deverá gerar movimentos compensatórios explícitos.
+
+Os enums de localização reservam `DEPOSITO`. A evolução para múltiplos depósitos deve introduzir `deposito` e `estoque_deposito`, preservando os tipos e o ledger comum; não há depósito adicional nesta versão.
+
+## Product Sync
+
+Uma confirmação publica `ProdutoCatalogChangedEvent` com motivo `STOCK_TRANSFER_COMPLETED` e somente o Condomínio de destino. O listener atual resolve seus Terminais e envia `PRODUCT_SYNC_REQUIRED` após commit. O sync incremental lê `EstoqueCondominio.updatedAt`; o central nunca é enviado ao Terminal.
+
+## Planograma
+
+`Planograma` pertence à Empresa, `PlanogramaPosicao` descreve setor/corredor/estante/módulo/prateleira/posição e `PlanogramaProduto` guarda facings, capacidade e níveis ideal/mínimo. Coordenadas `x`, `y`, `largura` e `altura` são opcionais para editor visual futuro.
+
+Produto pode ficar sem posição, mudar de posição ou sair do planograma sem alterar Produto, estoque ou disponibilidade. Futuras evoluções possíveis: editor drag-and-drop, mapa de estoque, rota de separação, reposição, ocupação, inventário por corredor e planogramas por depósito.
+
+## Auditoria
+
+São registrados no AuditLog existente: `ESTOQUE_EMPRESA_ENTRADA`, `ESTOQUE_EMPRESA_SAIDA`, `ESTOQUE_EMPRESA_AJUSTE`, `TRANSFERENCIA_CRIADA`, `TRANSFERENCIA_CONFIRMADA`, `TRANSFERENCIA_CANCELADA`, `PLANOGRAMA_CRIADO`, `PLANOGRAMA_ALTERADO`, `INVENTARIO_CRIADO`, `AJUSTE_INVENTARIO`, `INVENTARIO_FINALIZADO` e `INVENTARIO_CANCELADO`.
+
+Inventário físico e a carga inicial por planilha são detalhados em [[inventario]] e [[importacao-produtos]]. Ambos reutilizam o mesmo ledger; nenhum deles altera saldo silenciosamente.
+
+## Verificação
+
+`CentralStockTransferIntegrationTest` cobre entradas, ajuste, delta, transferência, criação ativa do destino, rollback do crédito, idempotência, cancelamento, Condomínio/Produto cross-tenant, ausência de sync para o central, sync restrito ao destino e planograma sem efeito sobre saldo. `InventoryAndProductImportIntegrationTest` cobre contagem, conflitos, importação, múltiplos barcodes, estoque inicial e isolamento. `DatabaseBaselineMySqlTest` valida a V10, as 35 tabelas e FKs cross-tenant no MySQL real quando Docker está disponível.

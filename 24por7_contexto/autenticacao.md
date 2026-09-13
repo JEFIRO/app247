@@ -2,16 +2,23 @@
 
 Voltar para [[00-index]]. Contexto multi-tenant em [[contexto]] e persistência em [[banco-de-dados]].
 
-> As rotas HTTP permanecem temporariamente desprotegidas durante a fase de desenvolvimento e testes. Essa é uma decisão temporária e não representa a configuração desejada para produção.
+> Os endpoints agregados sob `/admin/**` já exigem JWT com papel `ADMIN` ou
+> `GERENTE`. Diversas rotas legadas fora desse prefixo permanecem temporariamente
+> desprotegidas e ainda precisam de revisão antes da produção.
 
-`SecurityConfig` aplica uma única regra `anyRequest().permitAll()`: não há matcher administrativo exigindo JWT ou role nesta fase. Quando um JWT válido está presente, `SecurityFilter` continua preenchendo `EmpresaContext`; sem contexto, o backend não inventa empresa ou usuário.
+`SecurityConfig` aplica primeiro
+`requestMatchers("/admin/**").hasAnyRole("ADMIN", "GERENTE")` e mantém
+`anyRequest().permitAll()` apenas como regra residual. Quando um JWT válido está
+presente, `SecurityFilter` preenche `EmpresaContext`; sem contexto, o backend não
+inventa empresa ou usuário.
 
 ## Pendência obrigatória de pré-produção
 
 - [ ] Ativar autenticação e autorização HTTP
 - [ ] Definir rotas públicas
-- [ ] Proteger rotas administrativas
-- [ ] Aplicar roles ADMIN/GERENTE
+- [x] Proteger as novas agregações `/admin/**`
+- [x] Aplicar roles ADMIN/GERENTE nesse prefixo
+- [ ] Migrar/proteger CRUDs administrativos legados fora de `/admin/**`
 - [ ] Revisar CORS
 - [ ] Desabilitar endpoints de teste/debug
 
@@ -45,17 +52,25 @@ O token:
 
 O segredo JWT não possui mais fallback literal: `JWT` é obrigatório fora do profile de teste. SMTP e credenciais de banco também vêm de variáveis de ambiente. Valores anteriormente versionados ainda precisam ser rotacionados nos provedores.
 
-O filtro lê `Authorization`, remove literalmente `Bearer `, valida assinatura/expiração, busca o usuário pelo CPF, preenche o `SecurityContext` e define a empresa quando existente. Ele não registra mais token ou usuário no console. Tokens inválidos ainda fazem `TokenService.validate` lançar `RuntimeException`; não há tratamento específico no filtro.
+O filtro lê `Authorization`, remove literalmente `Bearer ` e valida assinatura/expiração uma única vez. O resultado validado contém `subject`, `userId` e `empresaId`. Os dois claims de identidade são comparados com o estado atual do banco antes de preencher o `SecurityContext` e o `EmpresaContext`; portanto um token antigo deixa de autenticar quando o usuário muda de Empresa ou quando a Empresa é desativada/encerrada.
+
+`UserRepository.findSecurityIdentityByCpf` usa uma projeção JPQL específica para o caminho crítico. A mesma consulta retorna o `User` usado como principal e apenas `Empresa.id`, `Empresa.ativo` e `Empresa.closed_at`. O filtro não chama getters da associação `User.empresa`, que permanece `LAZY`, e não depende de Open Session in View, `JOIN FETCH`, relacionamento `EAGER` ou transação aberta durante toda a requisição. Isso também evita uma segunda consulta e N+1 no filtro.
+
+Em rota protegida, Empresa desativada/encerrada produz `403` com código `COMPANY_DISABLED`; divergência ou ausência da Empresa informada no JWT produz `COMPANY_NOT_FOUND`. Usuário desativado produz `USER_DISABLED`. Uma rota `permitAll` continua atravessando a cadeia mesmo quando recebe um JWT antigo sem identidade operacional válida. Tokens criptograficamente inválidos continuam seguindo o comportamento anterior de `TokenService.validate`, que lança `RuntimeException`; esta correção não alterou o contrato geral de JWT inválido.
 
 ## Política HTTP atual
 
-`SecurityConfig` desabilita CSRF, define sessão stateless, executa o filtro JWT antes de `UsernamePasswordAuthenticationFilter` e libera todas as requisições com `anyRequest().permitAll()`. Não há `@PreAuthorize`. Services que obrigatoriamente precisam de tenant continuam exigindo `EmpresaContext`; a rota aberta não fornece nem inventa esse contexto.
+`SecurityConfig` desabilita CSRF, define sessão stateless, executa o filtro JWT
+antes de `UsernamePasswordAuthenticationFilter`, restringe `/admin/**` a
+`ADMIN`/`GERENTE` e libera as demais requisições pela regra residual. Não há
+`@PreAuthorize`. Todos os services de agregação ainda exigem
+`EmpresaContext.require()` e todas as queries filtram a Empresa autenticada.
 
 CORS aceita padrões de origem, métodos, headers e headers expostos com curinga e permite credenciais.
 
 ## Contexto de empresa
 
-Quando um JWT válido identifica um usuário, `SecurityFilter` coloca `user.empresa.id` em `EmpresaContext`, baseado em `ThreadLocal`, e o remove em `finally` após a cadeia do filtro.
+Quando um JWT válido identifica usuário e Empresa ativos, `SecurityFilter` coloca o `empresaId` escalar da projeção em `EmpresaContext`, baseado em `ThreadLocal`, e o remove em `finally` após a cadeia do filtro. A limpeza ocorre também se um controller, interceptor ou outro componente posterior lançar exceção, impedindo vazamento de tenant entre requisições reutilizadas pela mesma thread.
 
 O contexto é obrigatório nas APIs administrativas de empresa, condomínio e terminal. `EmpresaContext.require()` devolve `401` quando a identidade não fornece empresa. Os repositories validam o tenant na consulta:
 
@@ -87,7 +102,9 @@ Após persistir um usuário, `UserService` publica `UserCreatedEvent`. `UserList
 
 ## Pontos sensíveis observados
 
-- Não existe proteção HTTP administrativa nesta fase; empresa, condomínio e terminal dependem das validações internas de tenant quando há contexto.
+- As agregações `/admin/**` possuem proteção HTTP; empresa, condomínio, produto
+  e outros CRUDs legados fora desse prefixo ainda dependem das validações
+  internas de tenant quando há contexto.
 - `User.isEnabled()` respeita o campo `ativo`; somente `Boolean.TRUE` mantém a conta habilitada.
 - As propriedades sensíveis atuais foram externalizadas. Valores que já existiram no repositório devem ser considerados expostos e ainda precisam de rotação fora do código.
 - A propriedade de segredo JWT e credenciais SMTP/Mercado Pago estão configuradas por propriedades; valores não são reproduzidos aqui.

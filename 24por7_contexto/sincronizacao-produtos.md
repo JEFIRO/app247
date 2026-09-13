@@ -64,6 +64,8 @@ Operações:
 - `UPSERT`: `produto` completo, incluindo dados globais e quantidade corrente da associação;
 - `REMOVE`: `productId`, com `produto=null`; desativar ou remover localmente de forma idempotente.
 
+O produto de um UPSERT contém `codigoInterno` e `codigosBarras[]`. `codigo` permanece apenas como compatibilidade com clientes antigos. Alterar ou remover um barcode toca a versão do catálogo; o Terminal substitui o conjunto local daquele produto na mesma transação do UPSERT. O cursor `syncAt` também é atualizado dentro dessa transação SQLite.
+
 ## Recuperação e reconexão
 
 Ao iniciar, reconectar o socket ou recuperar internet, o Terminal deve solicitar sync usando o último `syncAt` confirmado. Perder `PRODUCT_SYNC_REQUIRED` não perde dados, pois as mudanças permanecem detectáveis pelos timestamps persistidos.
@@ -81,12 +83,13 @@ O problema adicional estava no cliente: SQLite vazio ainda usava cursor antigo. 
 **Adaptado em 24 de agosto de 2026.** O cliente em `../TerminalPython` agora:
 
 1. chama `/produtos/sync` com `uuidTerminal` e omite `lastSync` na primeira execução;
-2. valida `{syncAt, fullSync, changes}` e persiste exatamente o `syncAt` do backend somente após o commit SQLite;
+2. valida `{syncAt, fullSync, changes}` e persiste exatamente o `syncAt` na mesma transação SQLite do catálogo;
 3. aplica FULL/INCREMENTAL e todas as operações `UPSERT/REMOVE` em uma única transação;
 4. separa `PAYMENT_STATUS` de `PRODUCT_SYNC_REQUIRED` no `PaymentListener`;
 5. solicita sync no startup, em eventos, na conexão/reconexão e periodicamente;
 6. serializa execuções com lock, `sync_in_progress` e `sync_pending`, coalescendo eventos sem perder o último aviso;
 7. preserva cache e cursor em falha HTTP, resposta inválida ou rollback.
 8. só usa cursor quando um FULL anterior está marcado e a contagem ativa local é consistente.
+9. resolve scanner por `produto_codigo_barras`, aceita múltiplos códigos e remove códigos antigos no UPSERT.
 
 A suíte do Terminal cobre contrato, atomicidade, cursor legado, offline, concorrência, reconexão e roteamento de eventos.

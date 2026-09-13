@@ -2,9 +2,23 @@
 
 Voltar para [[00-index]]. Arquitetura em [[arquitetura-geral]], autenticação em [[autenticacao]] e riscos em [[auditoria-bugs]].
 
-> Todas as rotas HTTP permanecem temporariamente abertas durante desenvolvimento/testes por uma única regra `anyRequest().permitAll()`. JWT e roles podem ser usados por regras internas quando enviados, mas não são exigidos pela camada HTTP nesta fase.
+> As novas rotas `/admin/**` exigem JWT `ADMIN` ou `GERENTE`. As demais rotas
+> ainda seguem temporariamente a regra residual `anyRequest().permitAll()` e
+> dependem dos controles de tenant internos quando aplicáveis.
 
 ## Convenções observadas
+
+### Promoções e preço
+
+- `GET /promocoes`: filtros opcionais `abrangencia`, `status`, `condominioId`, `produtoId`.
+- `POST /promocoes`, `GET/PUT /promocoes/{id}` e `PATCH /promocoes/{id}/status`.
+- `GET /promocoes/preco?produtoId=...&condominioId=...` diagnostica o preço atual.
+- O corpo usa `nome`, `descricao`, `abrangencia`, `condominioId`, `tipo`, `valor`, `inicio`, `fim`, `ativo`, `prioridade` e `produtoIds`; empresa vem do JWT.
+- `POST /carrinho` aceita `expectedUnitPrice`. Aumento divergente retorna `409 PRICE_CHANGED` com o carrinho atualizado.
+- Product sync expõe `precoOriginal`, `preco`, `emPromocao`, `promocaoId` e `promocaoNome`.
+- Produto expõe `codigoInterno`, `codigosBarras[]` e `fiscal` opcional; `codigo` é alias legado do código principal.
+- `POST/PUT /produtos` aceitam JSON quando não há arquivo e multipart quando há foto.
+- Respostas e eventos de pagamento expõem `paymentAttemptId`; `orderId` sozinho não identifica retries futuros.
 
 - Não há prefixo global como `/api/v1`.
 - JSON é o formato predominante; upload de produto/foto usa `multipart/form-data`.
@@ -23,10 +37,10 @@ Esta é a segurança configurada atualmente em `SecurityConfig`. A tabela regist
 |---|---:|---:|---|
 | `/auth/**` | sim | não | nenhum |
 | `POST /onboarding`, `POST /condominio` | sim | não | nenhum |
-| `/empresas/**` | sim | não | nenhum |
-| `/condominios/**` | sim | não | nenhum |
-| `/terminais/**` | sim | não | nenhum |
-| `/mercado-pago/**`, `/mp/oauth/**` | sim | não | nenhum; callback ainda exige `state` válido na regra de negócio |
+| `/empresas/**` | não | sim | `ADMIN` ou `GERENTE`; encerramento valida `ADMIN` no caso de uso |
+| `/condominios/**` | não | sim | `ADMIN` ou `GERENTE` |
+| `/terminais/**` | não | sim | `ADMIN` ou `GERENTE` |
+| `/mercado-pago/**`, `/mp/oauth/**` | não | sim | `ADMIN` ou `GERENTE`; somente callbacks OAuth são públicos e exigem `state` válido |
 | `/produtos/**`, `/estoque/**` | sim | não | nenhum |
 | `/user/recuperar`, `/user/validar`, `/user/redefinir-senha` | sim | não | nenhum |
 | demais `/user/**` | sim pela regra residual | não | nenhum |
@@ -176,14 +190,14 @@ Segurança recomendada, não implementada: restringir operações de usuário ao
 ## GET /empresas/{empresaId}
 
 - Controller/service: `EmpresaController.buscar` → `EmpresaService.getEmpresaDoContexto`.
-- Segurança HTTP: pública temporariamente; requer contexto de empresa para concluir a operação.
+- Segurança HTTP: `ADMIN` ou `GERENTE` autenticado.
 - Resposta `200 EmpresaResponse`; `403` se o ID não coincide com `EmpresaContext`.
 - Tenant: comparação explícita com empresa autenticada.
 
 ## PUT /empresas/{empresaId}
 
 - Controller/service: `EmpresaController.atualizar` → `EmpresaService.atualizar`.
-- Segurança HTTP: pública temporariamente; requer contexto de empresa para concluir a operação.
+- Segurança HTTP: `ADMIN` ou `GERENTE` autenticado.
 - Body/saída: `EmpresaRequest` → `EmpresaResponse`.
 - Efeito: atualiza dados cadastrais; tenant validado antes da gravação.
 
@@ -378,6 +392,54 @@ Todos estão públicos temporariamente na camada HTTP; condomínio e produto con
 ## GET /estoque/geral
 
 - Resposta: `List<EstoqueResponse>` agregada por produto via `SUM` no banco.
+
+## Estoque central da Empresa
+
+- `GET /estoque-empresa?busca=&categoria=&ativo=&page=&size=&sort=`: listagem paginada por nome, SKU ou barcode.
+- `GET /estoque-empresa/produtos`: catálogo paginado para iniciar um saldo central ainda inexistente.
+- `POST /estoque-empresa/{produtoId}/entrada`: entrada positiva com motivo.
+- `POST /estoque-empresa/{produtoId}/saida`: saída positiva, registrada no ledger como delta negativo.
+- `PUT /estoque-empresa/{produtoId}`: ajuste para um saldo físico absoluto, inclusive negativo.
+- `GET /estoque-empresa/movimentacoes`: ledger do estoque central.
+
+## Transferências de estoque
+
+- `POST /transferencias-estoque`: cria rascunho central → condomínio com múltiplos itens.
+- `GET /transferencias-estoque?status=&page=&size=&sort=`: histórico paginado.
+- `GET /transferencias-estoque/{id}`: detalhe, nome/ID do destino, itens e movimentos vinculados.
+- `POST /transferencias-estoque/{id}/confirmar`: confirmação atômica e idempotente.
+- `POST /transferencias-estoque/{id}/cancelar`: cancela rascunho sem alterar saldos.
+
+## Planograma central
+
+- `GET/POST /planogramas` e `GET/PUT /planogramas/{id}`.
+- `POST /planogramas/{id}/posicoes` e `PUT /planogramas/posicoes/{id}`.
+- `POST /planogramas/posicoes/{id}/produtos` posiciona um produto.
+- `PUT /planogramas/produtos/{id}/posicao/{posicaoId}` move o posicionamento.
+- `DELETE /planogramas/produtos/{id}` faz remoção lógica do posicionamento, sem afetar saldo ou Produto.
+
+## Inventário físico
+
+- `POST /inventarios`: abre uma contagem e cria o snapshot dos itens ativos da localização.
+- `GET /inventarios?status=&localTipo=&page=&size=`: histórico paginado.
+- `GET /inventarios/{id}`: detalhe, progresso, divergências e conflitos.
+- `PUT /inventarios/{id}/itens/{itemId}/contagem`: registra quantidade com três casas e motivo opcional.
+- `POST /inventarios/{id}/finalizar`: aplica itens sem conflito de versão, de forma idempotente.
+- `POST /inventarios/{id}/cancelar`: cancela sem alterar estoque quando nenhum ajuste parcial existe.
+
+O body de criação usa `localTipo=ESTOQUE_EMPRESA|CONDOMINIO`; `localId` é obrigatório somente para Condomínio. Em contagem cega, o DTO omite saldo/diferença até a revisão permitida. Veja [[inventario]].
+
+## Importação de produtos
+
+- `GET /produtos/importacao/modelo`: XLSX oficial gerado pelo backend.
+- `POST /produtos/importacao/validar`: multipart part `file`; valida e devolve preview, sem criar Produto.
+- `GET /produtos/importacao/{id}`: progresso e resultado.
+- `POST /produtos/importacao/{id}/confirmar`: aceita a execução assíncrona e retorna `202`.
+- `GET /produtos/importacao/{id}/erros`: linhas inválidas/processadas com erro.
+
+O modo atual é `SOMENTE_NOVOS`. Arquivo, limites, linhas e tenant são validados no backend; a planilha nunca informa `empresa_id`. Veja [[importacao-produtos]].
+
+Todos esses endpoints derivam a Empresa de `EmpresaContext`; nenhum aceita `empresa_id` como autoridade.
 - Observação: campo `ativo` é sempre `true` na projeção agregada.
 
 # Carrinho e checkout temporário
@@ -386,7 +448,7 @@ Todos estão públicos temporariamente na camada HTTP; condomínio e produto con
 
 - Controller/service: `CarrinhoController.addCarinho` → `CarrinhoService.save`.
 - Segurança real: pública.
-- Body `CarrinhoRequest`: `terminalId` e lista `items [{ productId, quantity, receivedWeight }]`.
+- Body `CarrinhoRequest`: `terminalId` e lista `items [{ productId, quantity, receivedWeight, expectedUnitPrice?, codigoBarras? }]`. Quando presente, `codigoBarras` precisa pertencer ao mesmo Produto/Empresa e é congelado no OrderItem; clientes antigos podem omiti-lo.
 - Validação: `terminalId` obrigatório; lista não nula/não vazia; item e `productId` obrigatórios; quantidade inteira positiva.
 - Resposta: `200 CarrinhoResponseDTO` com itens snapshot.
 - Efeitos: valida terminal, força produtos à empresa dele, rejeita quantidade não positiva e produto duplicado, calcula subtotal e persiste itens por cascade.
@@ -430,7 +492,7 @@ Todos estão públicos temporariamente na camada HTTP; condomínio e produto con
 - Segurança real: pública.
 - Resposta: `OrderDetailResponse` com resumo do pagamento e snapshot do carrinho.
 - Efeitos: exige carrinho `OPEN`, muda para `READY_FOR_PAYMENT`, cria uma Order e publica reserva síncrona de estoque.
-- Concorrência: service faz consulta prévia e V20 impõe `UNIQUE(id_carrinho)`.
+- Concorrência: service faz consulta prévia e a baseline impõe `UNIQUE(carrinho_id)` em `orders`.
 
 ## GET /order?carrinho_id={id}
 
@@ -443,7 +505,7 @@ Todos estão públicos temporariamente na camada HTTP; condomínio e produto con
 - Controller/service: `PagamentoController.getPagamento` → `PagamentoService.gerarCobranca`.
 - Segurança real: pública.
 - Resposta: `200 true` quando a execução síncrona termina.
-- Efeitos: reutiliza/cria Order, reserva estoque se necessário, marca carrinho `PAYMENT_PENDING`, chama Mercado Pago Point, cria Pagamento e atualiza Order.
+- Efeitos: em transação local, reutiliza/cria Order, congela OrderItems, reserva estoque, cria/vincula `PaymentAttempt PENDING` e marca o carrinho `PAYMENT_PENDING`; após o commit chama o Mercado Pago; em nova transação persiste IDs, status e metadados remotos na tentativa.
 - Dependências: terminal precisa de `mercadoPagoTerminalId` e empresa de `MercadoPagoConta`.
 - Erros: resposta externa inválida gera conflito de estado; HTTP/timeout/indisponibilidade externos são sanitizados como `502`.
 
@@ -455,7 +517,8 @@ Este GET é um alias legado. Novas versões do Terminal devem usar o POST abaixo
 - Segurança HTTP: pública temporariamente; tenant é derivado do carrinho/terminal e comparado com `EmpresaContext` quando presente.
 - Efeito: bloqueia o carrinho, cria ou reutiliza a Order, reserva estoque e envia uma única cobrança Point.
 - Pré-condições: itens persistidos e não vazios, snapshots válidos, subtotal positivo e coerente com `sum(unitPrice * quantity)`, e tenant coerente entre carrinho, itens, produtos e terminal.
-- Idempotência: Order única por carrinho, lock pessimista e `X-Idempotency-Key` igual ao `orderId` local.
+- Idempotência: Order única por carrinho, tentativa persistida antes da chamada externa, lock pessimista por carrinho/Terminal e `X-Idempotency-Key` estável da `PaymentAttempt`.
+- Concorrência: no máximo uma Order intermediária por Terminal. Uma nova requisição para outro carrinho recebe `409 PAYMENT_ALREADY_ACTIVE` com `orderId`, `paymentAttemptId`, `cartId` e `paymentStatus` da tentativa existente.
 - Erros externos: classificação interna em `AUTHENTICATION`, `TERMINAL_NOT_FOUND`, `ACTIVE_CHARGE`, `IDEMPOTENCY_CONFLICT`, `INVALID_REQUEST`, `TIMEOUT`, `UNAVAILABLE` e `UNKNOWN`; resposta pública sanitizada como `502`.
 - Resposta `200 PointPaymentResponse`:
 
@@ -463,6 +526,7 @@ Este GET é um alias legado. Novas versões do Terminal devem usar o POST abaixo
 {
   "type": "PAYMENT_STATUS",
   "orderId": "uuid-order-local",
+  "paymentAttemptId": "uuid-tentativa-local",
   "terminalId": "uuid-terminal-interno",
   "status": "WAITING_PAYMENT",
   "mercadoPagoStatus": "created",
@@ -476,18 +540,26 @@ Este GET é um alias legado. Novas versões do Terminal devem usar o POST abaixo
 
 O backend valida a correlação entre Order e Terminal. Para `PENDING`, `CREATED`, `AT_TERMINAL` ou `ACTION_REQUIRED`, consulta a Order Point por `Order.mpOrderId` antes de responder. Falha temporária do Mercado Pago preserva o estado intermediário e retorna `reconciled=false`; status definitivo local não gera consulta desnecessária.
 
-Resposta `PaymentStatusResponse`: `type`, `orderId`, `paymentId`, `terminalId`, `status`, `mercadoPagoStatus`, `transactionId`, `statusDetail`, `message`, `updatedAt` e `reconciled`. Nenhuma credencial OAuth é exposta. Veja [[payment-reconciliation]].
+Resposta `PaymentStatusResponse`: `type`, `orderId`, `cartId`, `paymentId`, `paymentAttemptId`, `terminalId`, `status`, `mercadoPagoStatus`, `transactionId`, `statusDetail`, `message`, `amount`, `updatedAt` e `reconciled`. `amount` permite recompor o total da tela aprovada após reinício sem duplicar o carrinho no cliente. Nenhuma credencial OAuth é exposta. Veja [[payment-reconciliation]].
 
 - Finalidade: recuperar o estado após perda/reconexão do WebSocket sem criar nova cobrança.
 - Segurança HTTP: pública temporariamente; o terminal informado precisa ser exatamente o terminal do carrinho da Order.
 - Resposta: o mesmo `PointPaymentResponse` usado no início e no WebSocket.
 - Erro: `404` quando a Order não existe ou pertence a outro terminal.
 
+## GET /pagamento/terminal/{terminalId}/ativo
+
+- Finalidade: recuperar pagamento após reinício do processo/Raspberry ou perda dos IDs em memória.
+- Segurança HTTP: pública temporariamente; o `terminalId` limita a busca.
+- Comportamento: localiza a Order mais antiga em `PENDING`, `CREATED`, `AT_TERMINAL` ou `ACTION_REQUIRED` e chama `PaymentReconciliationService` antes de responder. Tentativa `PENDING` sem ID remoto pode repetir, após cooldown, a mesma submissão e a mesma chave de idempotência.
+- Resposta: `200 PaymentStatusResponse`; `204` quando não há tentativa não resolvida.
+- Garantia: o endpoint nunca cria uma `PaymentAttempt` nova.
+
 # Mercado Pago e webhook
 
 ## GET /mercado-pago/oauth
 
-- Segurança HTTP: pública temporariamente; requer contexto de empresa para concluir a operação.
+- Segurança HTTP: `ADMIN` ou `GERENTE` autenticado.
 - Principal: `@AuthenticationPrincipal User`.
 - Resposta: redirect HTTP para autorização Mercado Pago.
 - Efeito: grava state Redis `oauth:mp:{uuid}` por dez minutos com gestor e empresa.
@@ -502,11 +574,17 @@ Resposta `PaymentStatusResponse`: `type`, `orderId`, `paymentId`, `terminalId`, 
 - Segurança: pública.
 - Query: `code`, `state` obrigatórios.
 - Resposta: `200` vazio.
-- Efeitos: valida state, troca code, cria/atualiza `MercadoPagoConta` e remove state.
+- Efeitos: valida state, troca code, aplica vínculo/reautorização/substituição e remove state. Falha de domínio registra apenas o código seguro e temporário para consulta tenant-scoped.
+
+## GET /mercado-pago/oauth/result
+
+- Segurança HTTP: `ADMIN` ou `GERENTE` autenticado.
+- Resposta: `200 {code,message}` para a última falha temporária da Empresa ou `204` sem resultado.
+- Retenção: dez minutos; um novo início OAuth remove o resultado anterior.
 
 ## GET /mercado-pago/terminais
 
-- Segurança HTTP: pública temporariamente; requer contexto de empresa para concluir a operação.
+- Segurança HTTP: `ADMIN` ou `GERENTE` autenticado.
 - Resposta: lista de `MercadoPagoTerminalResponse` com campos externos e vínculo interno.
 - Efeito externo: `GET /terminals/v1/list` usando token da empresa.
 
@@ -514,11 +592,40 @@ Resposta `PaymentStatusResponse`: `type`, `orderId`, `paymentId`, `terminalId`, 
 
 - Finalidade: informar à Home do gestor se a configuração mínima de recebimento Point foi concluída.
 - Tenant: não recebe `empresaId`; usa exclusivamente o `EmpresaContext` preenchido pelo JWT.
-- Resposta: `MercadoPagoSetupStatusResponse` com `contaVinculada`, `maquininhaVinculada`, `configuracaoCompleta`, `quantidadeTerminais` e `quantidadeMaquininhasVinculadas`.
-- Conta vinculada: existe `MercadoPagoConta` da empresa com access token preenchido e autorização ainda não expirada.
-- Maquininha vinculada: existe ao menos um `Terminal` da cadeia `Empresa -> Condomínio -> Terminal` com `mercadoPagoTerminalId` não vazio.
+- Resposta: `MercadoPagoSetupStatusResponse` com os booleanos/contagens anteriores e `contaStatus` (`CONTA_NAO_VINCULADA`, `CONTA_VINCULADA_SEM_POINT`, `POINT_CONFIGURADA`, `CONTA_REVOGADA` ou `CONTA_COM_ERRO`).
+- Conta vinculada: existe lease ativo da Empresa, vínculo `ACTIVE`, access token preenchido e autorização ainda não expirada.
+- Maquininha vinculada: existe ao menos um `TerminalPointBinding ACTIVE` projetado no Terminal da Empresa.
 - Segurança de dados: não retorna access token, refresh token, client secret ou qualquer credencial OAuth.
 - Efeito externo: nenhum; consulta somente o banco local.
+
+## DELETE /mercado-pago/conta
+
+- Segurança: `ADMIN` ou `GERENTE`; Empresa vem do JWT/contexto.
+- Resposta: `204`.
+- Efeito: vínculo histórico `UNLINKED`, tokens limpos, lease ativo removido e Points encerradas. Terminal e catálogo permanecem.
+- Conflito: `MERCADO_PAGO_ACTIVE_PAYMENTS` se há pagamento não resolvido.
+
+## DELETE /empresas/me
+
+- Segurança: somente principal `ADMIN` da própria Empresa.
+- Resposta: `204` e operação idempotente.
+- Efeito: soft close da Empresa, unlink MP/Points, Terminais `RESET_REQUIRED`, evento WebSocket e usuários desativados; histórico financeiro permanece.
+
+## GET /terminal/{terminalId}/bootstrap
+
+- Segurança HTTP: pública como os contratos atuais do equipamento.
+- Resposta: `ACTIVE`, `PAYMENT_NOT_CONFIGURED`, `DISABLED`, `RESET_REQUIRED` ou `UNACTIVATED`, com `paymentConfigured`, motivo e timestamp quando aplicável.
+- Regra: confirmação autoritativa usada pelo Terminal; ID inexistente retorna `RESET_REQUIRED` no corpo 200.
+
+## POST /terminal/{terminalId}/factory-reset/started
+
+- Segurança HTTP: pública como os contratos atuais do equipamento.
+- Resposta: `204`; confirmação idempotente do início.
+
+## POST /terminal/{terminalId}/factory-reset/completed
+
+- Segurança HTTP: pública como os contratos atuais do equipamento.
+- Resposta: `204`; muda `RESET_REQUIRED` para `UNACTIVATED` e libera a identidade de ativação antiga.
 
 ## GET /mp/oauth/terminal/{idUser}
 
@@ -529,8 +636,8 @@ Resposta `PaymentStatusResponse`: `type`, `orderId`, `paymentId`, `terminalId`, 
 - Segurança HTTP: pública, com autenticação própria HMAC.
 - Headers: `x-signature`, `x-request-id`; query opcional `data.id`; body JSON do Mercado Pago.
 - Respostas: `200 ENFILEIRADO`, `200 DUPLICADO`, `400` payload inconsistente, `401` assinatura inválida, `503` segredo ausente.
-- Efeitos: chave Redis de deduplicação por 24 horas e push em `mp_queue`.
-- Processamento posterior: `PaymentWorker` → `PagamentoService.atualizarPagamento` → Order/Pagamento/estoque.
+- Efeitos: registra/deduplica `webhook_event` no MySQL, mantém chave Redis curta, faz push em `mp_queue` e atualiza o inbox para `QUEUED/PROCESSED/DLQ`.
+- Processamento posterior: `PaymentWorker` → `PagamentoService.atualizarPagamento` → `PaymentStateTransitionService` → PaymentAttempt/PaymentEvent/Order/estoque.
 
 # Arquivos e documentação
 
@@ -573,6 +680,32 @@ Quando `app.test-endpoints.enabled=true` (padrão atual fora do profile `prod`),
 
 Falhas HTTP, de conexão ou timeout na integração são traduzidas para resposta sanitizada `502 Bad Gateway`; erros de entrada seguem o tratamento global aplicável. Esses endpoints podem alterar o estado da conta de teste e não devem ser habilitados em produção.
 
+# Telemetria de Terminal
+
+## GET /terminal/health
+
+Endpoint leve usado pelo Terminal para medir alcance e latência da API. Retorna `status=UP` e timestamp. Não representa a saúde da Point.
+
+## POST /terminal/telemetry
+
+Recebe o UUID provisionado, `capturedAt` e os blocos `system`, `network`, `application` e `display`. Valida Terminal existente/ativo, rejeita timestamp mais de cinco minutos no futuro, grava histórico, atualiza o estado atual somente quando a amostra é mais nova e reconcilia alertas. Empresa e condomínio não são aceitos como autoridade no body.
+
+## GET /terminais/monitoramento
+
+Endpoint administrativo e multi-tenant. Aceita `condominioId` e `status=SAUDAVEL|ATENCAO|CRITICO|OFFLINE`. O resumo considera todos os Terminais dentro do filtro de condomínio; o filtro de status restringe a lista.
+
+## GET /terminais/{id}/telemetria
+
+Retorna presença, classificação, motivos, métricas atuais e alertas ativos, sempre validando `Terminal -> Condomínio -> EmpresaContext`.
+
+## GET /terminais/{id}/telemetria/historico?period=1h|6h|24h|7d
+
+Retorna somente os pontos necessários aos gráficos: temperatura, CPU, RAM, disco, latência e sinal Wi-Fi, em ordem cronológica.
+
+## GET /terminais/{id}/telemetria/alertas
+
+Retorna as 100 ocorrências mais recentes, ativas e resolvidas, sem apagar o histórico operacional.
+
 # WebSocket
 
 ## /terminal-socket
@@ -593,3 +726,72 @@ Falhas HTTP, de conexão ou timeout na integração são traduzidas para respost
 - Handshake STOMP sem autenticação, origem por padrão curinga.
 - Broker simples em memória; não há `@MessageMapping` de entrada.
 - `PaymentSocketService` publica o mesmo `PaymentEvent` após commit em `/topic/payment/{terminalId}`.
+
+# Administração agregada
+
+As rotas desta seção exigem JWT de usuário `ADMIN` ou `GERENTE`, derivam a
+Empresa exclusivamente de `EmpresaContext` e retornam DTOs, nunca entities.
+
+## GET /admin/dashboard
+
+Retorna `AdminDashboardResponse`: nome da Empresa/usuário, instante de geração,
+vendas e faturamento do dia, Terminais, alertas, estoque, pagamentos em atenção,
+checklist e até oito atividades recentes. É o único snapshot necessário para
+a Home Flutter.
+
+## GET /admin/onboarding-status
+
+Retorna `AdminOnboardingStatusResponse`. Todos os valores são derivados de
+Empresa, Condomínio, Terminal, setup Mercado Pago, Produto e
+`EstoqueCondominio`; não há estado de checklist persistido.
+
+## GET /admin/terminals/summary
+
+Retorna `AdminTerminalSummaryResponse` com `total`, `online`, `offline` e
+`comAlerta`. Considera Terminais ativos e usa o threshold configurado de
+telemetria para classificar `lastPing`.
+
+## GET /admin/alerts/summary e GET /admin/alerts
+
+O resumo retorna `ativos`, `info`, `warning` e `critical`. A listagem aceita
+`status`, `page`, `size` e `sort`; limita a página a 100 registros e permite
+ordenar por `openedAt`, `lastObservedAt`, `status` ou `type`.
+
+## GET /admin/payments/attention-summary e GET /admin/payments
+
+O resumo considera somente a tentativa mais nova de cada Order e conta
+`ACTION_REQUIRED`, `PENDING` vencido pelo threshold e
+`FAILED/processing_error`. A listagem aceita `from`, `to`, `status`, `provider`,
+`terminalId`, `orderId`, paginação e ordenação validada.
+
+## GET /admin/sales/summary e GET /admin/sales
+
+O resumo aceita `period=TODAY|7D|30D` ou `from`/`to` e retorna quantidade,
+faturamento e ticket médio. Somente `Order.PROCESSED` por `paidAt` entra no
+faturamento. A listagem acrescenta filtros `condominioId`, `terminalId` e
+`status`; quando o status é `PROCESSED`, o período também se aplica a `paidAt`.
+
+## GET /admin/activity?size=20
+
+Retorna até 30 `AdminActivityResponse` derivados de ações conhecidas do
+`AuditLog`. Dados técnicos `before_data`, `after_data` e metadata não são
+expostos.
+
+Detalhes das regras e limitações: [[admin-dashboard]].
+
+# Branding da Empresa
+
+## GET /empresas/me/branding
+
+Exige JWT `ADMIN` ou `GERENTE`. Retorna nome de exibição, URLs de logo e cores
+da Empresa derivada de `EmpresaContext`. Não recebe `empresaId`.
+
+## PUT /empresas/me/branding
+
+Exige o mesmo papel e recebe `nomeExibicao`, `logoUrl`, `logoDarkUrl`,
+`corPrincipal`, `corSecundaria` e `corDestaque`. Logos, quando preenchidos,
+devem usar HTTPS; cores usam `#RRGGBB`. Nenhuma credencial OAuth é aceita ou
+retornada.
+# Leads comerciais públicos
+
+`POST /public/leads` recebe solicitações do site comercial. A rota é pública, valida os campos obrigatórios, aplica honeypot e rate limiting e persiste cada contato com status inicial `NEW`. Veja [[marketing-leads]].

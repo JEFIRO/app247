@@ -27,6 +27,8 @@ Um job executado a cada 60 segundos percorre todos os terminais e marca como `OF
 
 Endpoint registrado: `/payment-socket/*`. O cliente deve conectar usando o identificador do terminal como último segmento, por exemplo `/payment-socket/{terminalId}`.
 
+O Terminal Python usa este socket nativo, não o broker STOMP. Por isso mensagens de diagnóstico do Spring como `WebSocketSession[0 current WS...]` descrevem o broker STOMP e não provam que o Terminal esteja conectado. A presença relevante aparece nos logs `[PAYMENT-WS] socket nativo conectado/desconectado`; a ausência da sessão não impede recuperação pelo endpoint de status.
+
 Ao conectar, `PaymentWebSocketHandler` extrai esse segmento e mantém uma única `WebSocketSession` por `terminalId` em memória. Uma nova conexão para o mesmo ID substitui a anterior no mapa. Ao fechar, a sessão é removida.
 
 O mesmo handler envia dois tipos de evento à sessão aberta do Terminal. Para pagamento, `PaymentEvent` contém:
@@ -41,7 +43,7 @@ O mesmo handler envia dois tipos de evento à sessão aberta do Terminal. Para p
 - `message`;
 - `paid`, mantido temporariamente para compatibilidade com o contrato antigo.
 
-O terminal é obtido exclusivamente por `Order -> Carrinho -> Terminal`; não há broadcast. Os listeners executam em `AFTER_COMMIT`. Falha de envio ou terminal offline é registrada, mas não reverte Pagamento, Order ou estoque.
+O terminal é obtido exclusivamente por `Order -> Terminal`/`Carrinho -> Terminal`; não há broadcast. Os listeners executam em `AFTER_COMMIT`. Falha de envio ou terminal offline é registrada, mas não reverte PaymentAttempt, Order ou estoque.
 
 Não há replay ou clusterização das sessões. Para recuperação, o Terminal consulta `GET /order/{orderId}/status?terminalId={terminalId}`; estados não definitivos acionam [[payment-reconciliation]] antes da resposta, sem criar nova cobrança.
 
@@ -59,6 +61,12 @@ A mensagem é apenas invalidação. O dado e os tombstones vêm de `GET /produto
 
 Motivos atuais: `PRODUCT_CREATED`, `PRODUCT_UPDATED`, `PRODUCT_ACTIVATED`, `PRODUCT_DEACTIVATED`, `PRODUCT_ASSIGNED_TO_CONDOMINIUM`, `PRODUCT_REMOVED_FROM_CONDOMINIUM` e `PRODUCT_AVAILABILITY_CHANGED`. `PRODUCT_CREATED` sem condomínio produz somente registro interno, sem envio.
 
+## Reset de aplicação do Terminal
+
+Ao encerrar definitivamente uma Empresa, `TerminalLifecycleService` persiste `RESET_REQUIRED` e publica `TerminalFactoryResetRequiredEvent` após o commit. `PaymentWebSocketHandler` envia `TERMINAL_FACTORY_RESET_REQUIRED` somente para a sessão do Terminal correspondente. Se ela não existir, nada é perdido: o estado permanece no MySQL.
+
+No cliente Python, o evento é apenas um hint. Startup, reconnect e verificação periódica consultam `GET /terminal/{terminalId}/bootstrap`; somente `RESET_REQUIRED` confirmado por HTTP inicia o reset. Falha de rede/5xx nunca é convertida em reset. Ver [[terminal-lifecycle]].
+
 ## STOMP
 
 Handshake STOMP: `/ws`.
@@ -73,7 +81,7 @@ Configuração do broker:
 
 ## Relação com o fluxo de pagamento
 
-Os dois mecanismos de saída — WebSocket nativo e STOMP — escutam o mesmo `PaymentEvent`. `PagamentoService` publica o evento quando uma transição Point é efetivamente aplicada. Aprovação, recusa, cancelamento, expiração, ação requerida, reembolso e estados intermediários são comunicados pelo mapper centralizado; evento duplicado/obsoleto não gera nova mensagem.
+Os dois mecanismos de saída — WebSocket nativo e STOMP — escutam o mesmo evento de aplicação `PaymentEvent`. `PaymentStateTransitionService` publica o evento quando uma transição da tentativa é efetivamente aplicada. Aprovação, recusa, cancelamento, expiração, ação requerida, reembolso e estados intermediários são comunicados pelo mapper centralizado; evento duplicado/obsoleto não gera nova mensagem. O histórico persistido equivalente fica em `payment_event`.
 
 ## Segurança e operação
 

@@ -1,6 +1,6 @@
 # Integração Mercado Pago
 
-Voltar para [[00-index]]. Persistência em [[banco-de-dados]], autenticação em [[autenticacao]] e notificações em [[websocket]].
+Voltar para [[00-index]]. Persistência em [[database]], autenticação em [[autenticacao]] e notificações em [[websocket]].
 
 ## Escopo implementado
 
@@ -20,9 +20,9 @@ Os testes externos falham explicitamente quando `MP_TEST_ACCESS_TOKEN` não est�
 
 ## OAuth e conta por empresa
 
-`GET /mercado-pago/oauth` está público temporariamente na camada HTTP, mas o caso de uso exige principal `ADMIN` ou `GERENTE`. O usuário e a empresa vêm da autenticação, nunca de um ID confiado ao cliente. O state armazenado no Redis por dez minutos contém ambos os IDs. No callback, o service confirma que o gestor ainda pertence à mesma empresa e ainda possui papel administrativo antes de trocar o code.
+`GET /mercado-pago/oauth` exige principal `ADMIN` ou `GERENTE`. O usuário e a empresa vêm da autenticação, nunca de um ID confiado ao cliente. O state armazenado no Redis por dez minutos contém ambos os IDs. No callback público, o service confirma que o gestor ainda pertence à mesma empresa e ainda possui papel administrativo antes de trocar o code. Falhas de domínio deixam somente seu código seguro em `oauth:mp:result:{empresaId}` por dez minutos; `GET /mercado-pago/oauth/result` permite ao Flutter da mesma Empresa apresentar o resultado ao retomar, sem credenciais nem identificação cross-tenant.
 
-`MercadoPagoConta` tem relação 1:1 com empresa e guarda somente credenciais/metadados OAuth. Se a empresa já possui conta, uma nova autorização atualiza o mesmo registro em vez de criar outro. `mpUserId` preserva o `user_id` externo usado para localizar credenciais ao consultar webhooks resumidos.
+`MercadoPagoConta` é agora o vínculo histórico Empresa/conta externa. `mpUserId` preserva o `user_id` devolvido pelo token exchange e `mercado_pago_conta_ativa` garante no banco no máximo um vínculo ativo por conta real e um por Empresa. Reautorização da mesma conta atualiza tokens sem duplicar; substituição cria novo vínculo e encerra o anterior. Unlink remove o lease, limpa tokens e permite reutilização futura da conta por outra Empresa. O modelo completo está em [[mercado-pago-account-lifecycle]].
 
 Access token, refresh token, public key, token type, scope, live mode e expiração são lidos de `MercadoPagoTokenResponse`. Antes de usar uma conta, o service verifica `dataExpiracao`; token expirado exige nova autorização OAuth. Renovação automática continua não implementada.
 
@@ -30,7 +30,7 @@ As rotas antigas `GET /mp/oauth/mercadopago/{idUser}` e `GET /mp/oauth/terminal/
 
 ## Maquininhas Point
 
-`GET /mercado-pago/status` fornece o estado agregado usado pela Home do aplicativo gestor. A empresa vem de `EmpresaContext`, sem `empresaId` informado pelo cliente. `contaVinculada` exige registro OAuth da empresa com access token preenchido e `dataExpiracao` futura; `maquininhaVinculada` exige ao menos um Terminal da hierarquia da empresa com `mercadoPagoTerminalId` não vazio; `configuracaoCompleta` é a conjunção dessas condições. O response inclui contagens de terminais internos e vínculos Point, mas nenhuma credencial. A consulta não chama a API externa do Mercado Pago.
+`GET /mercado-pago/status` fornece o estado agregado usado pela Home do aplicativo gestor. A empresa vem de `EmpresaContext`, sem `empresaId` informado pelo cliente. `contaVinculada` exige lease e vínculo `ACTIVE`, token preenchido e expiração futura; `maquininhaVinculada` exige `TerminalPointBinding ACTIVE` da mesma conta. `configuracaoCompleta` é a conjunção dessas condições. O response inclui contagens e estado (`CONTA_NAO_VINCULADA`, `CONTA_VINCULADA_SEM_POINT`, `POINT_CONFIGURADA`, `CONTA_REVOGADA` ou `CONTA_COM_ERRO`), mas nenhuma credencial. A consulta não chama a API externa.
 
 `GET /mercado-pago/terminais` resolve `EmpresaContext -> MercadoPagoConta -> accessToken` e consulta `GET https://api.mercadopago.com/terminals/v1/list`. A resposta expõe somente os campos já mapeados da API (`id`, `posId`, `store`, `externalPosId`, `operationMode`) e acrescenta `vinculado` e `terminalInternoId` a partir do banco local. Nenhuma credencial é retornada.
 
@@ -44,45 +44,47 @@ As rotas antigas `GET /mp/oauth/mercadopago/{idUser}` e `GET /mp/oauth/terminal/
 6. confirma que outro terminal interno não usa o mesmo ID;
 7. persiste `Terminal.mercadoPagoTerminalId`.
 
-`DELETE /terminais/{terminalId}/mercado-pago` remove o vínculo após as mesmas validações de conta e tenant. A unicidade também é garantida no banco por V19.
+`DELETE /terminais/{terminalId}/mercado-pago` remove o vínculo Point pelo tenant mesmo quando a conta já não está autorizada. `terminal_point_binding` preserva o histórico; `Terminal.mercadoPagoTerminalId` é somente a projeção ativa. Unlink ou substituição da conta encerra todas as Points antigas e não reseta cadastro, catálogo ou ativação do Terminal.
 
 ## Criação da order Point
 
-`POST /pagamento/terminal/{carrinho_id}` cria ou recupera a order local e publica o evento síncrono de cobrança. `GET` no mesmo path permanece como alias legado e ainda responde apenas `true`. A chamada externa é `POST https://api.mercadopago.com/v1/orders`. Antes da chamada, o service exige:
+`POST /pagamento/terminal/{carrinho_id}` executa três fases: (A) transação local para criar/reutilizar Order e `PaymentAttempt PENDING`; (B) chamada externa fora de transação; (C) nova transação local para persistir IDs, status e metadados remotos na tentativa. `GET` no mesmo path permanece como alias legado. A chamada externa é `POST https://api.mercadopago.com/v1/orders`. Antes da chamada, o service exige:
 
 ```text
-Order.empresa -> MercadoPagoConta.accessToken
-Order.idTerminal -> Terminal -> mercadoPagoTerminalId
-Terminal.condominio.empresa == Order.empresa
+Order.empresa -> mercado_pago_conta_ativa -> MercadoPagoConta ACTIVE
+Order.idTerminal -> Terminal -> TerminalPointBinding ACTIVE
+Point binding pertence à mesma conta ativa e Terminal.condominio.empresa == Order.empresa
 ```
 
 Se houver `EmpresaContext`, ele também deve coincidir com a empresa da order. Terminal ausente, terminal de outro tenant, conta ausente ou maquininha não vinculada impedem a chamada externa.
 
-Antes de criar ou reutilizar a cobrança, `CarrinhoService.validarParaPagamento` também exige ao menos um item, snapshots de preço e quantidade válidos, subtotal positivo exatamente igual à soma dos itens e a mesma empresa em carrinho, produto, item e cadeia `Terminal -> Condomínio -> Empresa`. Uma inconsistência é recusada antes da reserva ou chamada externa.
+Antes de criar ou reutilizar a cobrança, cada Produto do carrinho é recarregado pela chave composta lógica `produtoId + empresaId`. Isso impede que uma referência parcial ou desanexada produza `OrderItem` sem o `codigo_interno` real. `CarrinhoService.validarParaPagamento` também exige ao menos um item, snapshots de preço e quantidade válidos, subtotal positivo exatamente igual à soma dos itens e a mesma empresa em carrinho, produto, item e cadeia `Terminal -> Condomínio -> Empresa`. O snapshot recusa SKU, nome, unidade, quantidade ou valores obrigatórios incompletos antes do INSERT, da reserva e da chamada externa.
 
 O request contém:
 
 - `type: point`;
-- `external_reference`: ID da order local;
+- `external_reference`: referência única e persistida da tentativa;
 - `expiration_time: PT5M` na configuração atual, configurável por `MP_POINT_EXPIRATION_TIME`;
 - uma transação com o total;
 - `terminal_id` vindo de `Terminal.mercadoPagoTerminalId` e `print_on_terminal: no_ticket`;
-- `X-Idempotency-Key`: ID da order local;
+- `X-Idempotency-Key`: chave estável e persistida da tentativa;
 - valor da transação formatado obrigatoriamente com duas casas decimais.
 
-O carrinho é bloqueado com `PESSIMISTIC_WRITE` durante o início. Se já existe `mpOrderId`, a mesma cobrança é devolvida e nenhum novo POST externo é realizado. Assim, clique duplicado e duas requisições concorrentes usam a mesma Order e a mesma chave de idempotência.
+O carrinho e a linha do Terminal são bloqueados com `PESSIMISTIC_WRITE` na transação A. Somente a requisição que criar a tentativa local recebe autorização para enviar o POST remoto; chamadas concorrentes encontram a tentativa existente e não enviam outra. Outra Order intermediária do mesmo Terminal bloqueia a nova com `PAYMENT_ALREADY_ACTIVE`. Se já existe `providerOrderId`, a mesma cobrança é reconciliada/devolvida. Retry de uma compra futura usa nova Order/tentativa somente depois de a anterior estar terminal.
 
-A criação bem-sucedida deve retornar `created` (também é tolerado `at_terminal` por já ser intermediário). Ela nunca é interpretada como aprovação. O response ao Terminal é `PointPaymentResponse`, com `status: WAITING_PAYMENT`, Order local, terminal e mensagem para orientar o uso da maquininha.
+A criação normal retorna `created` (também é tolerado `at_terminal` por já ser intermediário). Uma repetição idempotente pode devolver estado mais novo, inclusive terminal; nesse caso o ID remoto é persistido e `PaymentStateTransitionService` aplica a resposta sem regressão. O response ao Terminal inclui `paymentAttemptId` e nunca transforma timeout em rejeição.
 
-A resposta é lida por `OrderResponse`. Campos desconhecidos são ignorados, mas `status` e `status_detail` chegam primeiro como strings; só valores conhecidos são convertidos para enums persistidos. Corpo nulo, ID ausente ou status desconhecido tornam a criação inválida. `transactions` e `payments` podem estar ausentes/vazios sem causar NPE; nesse caso o pagamento nasce sem transaction ID.
+A resposta é lida por `OrderResponse`. Campos desconhecidos são ignorados, mas `status` e `status_detail` chegam primeiro como strings; só valores conhecidos são convertidos para enums persistidos. Corpo nulo ou ID ausente tornam a criação inválida. Se chegar status futuro, o ID remoto ainda é salvo com estado local conservador `PENDING`; a transição é recusada até o status ser conhecido. `transactions` e `payments` podem estar ausentes/vazios sem causar NPE.
 
 O client HTTP compartilhado possui connect timeout de 5 segundos e read timeout de 15 segundos, ambos configuráveis. Erros e timeouts são convertidos em `ExternalServiceException`; a API devolve `502` sanitizado, sem reproduzir corpo externo sensível. O listener não engole mais exceções, portanto a transação/chamador não aparenta sucesso após falha externa.
 
+O início Point registra marcos `[PAYMENT-BACKEND]` para request recebido, Order/tentativa criada ou reutilizada, chamada e resposta do Mercado Pago, status remoto, tentativa persistida e resposta ao Terminal. IDs operacionais podem aparecer; tokens e credenciais nunca são registrados.
+
 ## Ordenação e máquina de estados
 
-`Order.mpEventVersion` e `Order.mpEventDate` preservam o último evento aplicado. `PagamentoService` carrega a Order com `PESSIMISTIC_WRITE` e rejeita versão igual/anterior, regressões de `PROCESSED`, alterações de estados terminais e reembolso de Order que não estava processada.
+`PaymentAttempt.providerEventVersion` e `providerEventAt` preservam o último evento aplicado. `PaymentStateTransitionService` carrega a tentativa por `provider + externalReference` com lock e rejeita versão igual/anterior, regressões de `PROCESSED` e transições inválidas.
 
-Na aprovação, Pagamento e Order recebem `paidAt` e o Carrinho passa a `PAID`. Estados não concluídos encerram o carrinho como `CANCELED` e liberam estoque somente quando há reserva. A persistência ocorre antes da publicação síncrona do evento de estoque, dentro da mesma transação.
+Na aprovação, PaymentAttempt e Order recebem `paidAt` e o Carrinho passa a `PAID`. Estados não concluídos encerram o carrinho como `CANCELED` e liberam estoque somente quando há reserva. Cada mudança aceita também anexa um `payment_event` antes da notificação pós-commit.
 
 ## Formatos externos separados
 
@@ -94,7 +96,7 @@ O código mantém DTOs distintos para três papéis:
 
 O endpoint `/v1/orders/{id}/events` usado nos testes recebe apenas comandos de simulação. Nenhum JSON de resposta/webhook é reenviado como comando.
 
-Status externos desconhecidos não são descartados: geram `UnknownExternalStatusException`, passam por três tentativas e terminam em `mp_queue:dlq` para análise.
+Status externos desconhecidos não são descartados: geram `UnknownExternalStatusException`, passam por três tentativas e terminam em `mp_queue:dlq` para análise. `webhook_event` registra o recebimento antes da fila, deduplica por identidade SHA-256 de ação/Order/versão, mantém payload sanitizado e é atualizado para `QUEUED`, `PROCESSED` ou `DLQ`.
 
 Os simuladores continuam habilitados por padrão no desenvolvimento por `app.test-endpoints.enabled=true`. O profile `prod` os desabilita. Isso não substitui a revisão obrigatória antes de produção.
 
@@ -102,7 +104,7 @@ Os simuladores continuam habilitados por padrão no desenvolvimento por `app.tes
 
 Não há status Point `processing` no material externo fornecido. Os estados intermediários documentados são `created`, `at_terminal` e `action_required`.
 
-| Status Mercado Pago | `Order.status` / `mpStatus` | `Pagamento.status` |
+| Status Mercado Pago | `Order.status` | `PaymentAttempt.status` |
 |---|---|---|
 | `created` | `CREATED` | `PENDING` |
 | `at_terminal` | `AT_TERMINAL` | `PENDING` |
@@ -115,7 +117,7 @@ Não há status Point `processing` no material externo fornecido. Os estados int
 
 O estado é decidido por `status`. `data.status_detail` alimenta o detalhe da order, enquanto `transactions.payments[0].status_detail` alimenta o detalhe do pagamento; na ausência deste último, o detalhe da order é usado como fallback. Assim uma order `failed` pode preservar no pagamento uma causa específica como `bad_filled_card_data`. Um status desconhecido é desserializado sem derrubar o worker, mas não altera nem persiste entidades. Isso evita converter silenciosamente um estado futuro em outro estado interno.
 
-`Order.mpStatusDetail` só recebe detalhes enumerados conhecidos. `Pagamento.statusDetail` preserva o texto recebido, inclusive detalhes futuros. Valores documentados reconhecidos incluem `created`, `at_terminal`, `accredited`, `canceled`, `expired`, `refunded`, `check_on_terminal`, `failed` e as recusas `bad_filled_card_data`, `required_call_for_authorize`, `card_disabled`, `high_risk`, `insufficient_amount`, `invalid_installments`, `max_attempts_exceeded`, `rejected_other_reason` e `processing_error`.
+O detalhe de Order continua convertido quando conhecido, enquanto `PaymentAttempt.statusDetail` preserva o texto recebido, inclusive detalhes futuros. Valores documentados reconhecidos incluem `created`, `at_terminal`, `accredited`, `canceled`, `expired`, `refunded`, `check_on_terminal`, `failed` e as recusas `bad_filled_card_data`, `required_call_for_authorize`, `card_disabled`, `high_risk`, `insufficient_amount`, `invalid_installments`, `max_attempts_exceeded`, `rejected_other_reason` e `processing_error`.
 
 ## Meio de pagamento
 
@@ -141,10 +143,10 @@ Antes de enfileirar, o controller:
 3. monta `id:{data.id lowercase};request-id:{x-request-id};ts:{ts};`, omitindo componentes ausentes conforme a regra externa;
 4. calcula HMAC-SHA256 e compara em tempo constante;
 5. rejeita com `401` assinatura inválida e com `400` divergência entre `data.id` da URL e do body;
-6. cria atomicamente no Redis uma chave de deduplicação por `action + data.id + version`, TTL 24 horas;
-7. enfileira em `mp_queue` e responde `200`.
+6. registra `webhook_event` com identidade SHA-256 de `action + data.id + version` e payload sanitizado;
+7. cria no Redis uma chave curta de deduplicação, enfileira em `mp_queue`, marca o inbox `QUEUED` e responde `200`.
 
-Reentregas idênticas respondem `200 DUPLICADO` sem novo item na fila. Se o enqueue falhar, a chave de deduplicação é removida para permitir retry. Essa deduplicação de transporte dura o TTL; a idempotência do efeito de estoque é permanente em MySQL por `movimentacao_estoque.chave_idempotencia`.
+Reentregas idênticas respondem `200 DUPLICADO` sem novo item na fila. Se o enqueue falhar, a chave Redis é removida e o inbox permanece `RECEIVED`, permitindo retry. O worker marca `PROCESSED` ou `DLQ` e vincula a tentativa/empresa quando resolvidas. A idempotência do efeito de estoque continua permanente por `movimentacao_estoque.chave_idempotencia`.
 
 ## Webhook completo e resumido
 
@@ -154,7 +156,7 @@ Uma notificação resumida, como a produzida pela tela de simulação, pode cont
 
 O worker consome a cada dois segundos, move atomicamente o payload para `mp_queue:processing`, tenta no máximo três vezes e envia falhas permanentes para `mp_queue:dlq`. Recuperação automática de itens órfãos em `processing` após queda permanece pendente.
 
-A versão do payload é armazenada em `Order.mpEventVersion`. O processamento usa lock pessimista e `OrderStatus.canTransitionTo`, impedindo que evento antigo ou transição inválida regrida um estado definitivo.
+A versão do payload é armazenada em `PaymentAttempt.providerEventVersion`. O processamento usa lock pessimista e `OrderStatus.canTransitionTo`, impedindo que evento antigo ou transição inválida regrida um estado definitivo.
 
 ## Eventos
 
@@ -197,6 +199,6 @@ A recuperação de pagamentos Point está detalhada em [[payment-reconciliation]
 - Access token expirado não é renovado automaticamente.
 - Status externo futuro é ignorado e não fica em uma DLQ/auditoria permanente.
 - Versão externa, lock e máquina de estados protegem monotonicidade.
-- A chamada HTTP de criação ocorre durante fluxo transacional que também mantém a reserva local; lentidão externa pode prolongar a transação.
+- Cancelamento Point seguro ainda não possui endpoint de produção. Por isso o Terminal não oferece botão que apenas limpe estado; cancelamento incerto continua bloqueado até existir confirmação remota.
 
 `PT15M` é o padrão documentado da API Orders Point, mas esta aplicação configura `PT5M`; ambos são durações ISO-8601 dentro da faixa oficial de 30 segundos a 3 horas. A resposta inicial oficial é `201` com status `created`, portanto nunca equivale a aprovação. Referências consultadas: [criação de order](https://www.mercadopago.com.br/developers/pt/reference/in-person-payments/point/orders/create-order/post), [status Point](https://www.mercadopago.com.br/developers/pt/docs/mp-point/resources/status-order-transaction) e [notificações](https://www.mercadopago.com.br/developers/pt/docs/mp-point/notifications).
