@@ -268,6 +268,22 @@ class PagamentoServiceTest {
     }
 
     @Test
+    void pollingSemVersaoIgnoraEventoPersistidoComAMesmaIdentidade() throws Exception {
+        order.setStatus(OrderStatus.CREATED);
+        String created = webhook("created", "created", null, null, null, false)
+                .replace("\"version\":3", "\"version\":null");
+        when(paymentEventRepository.existsByProviderAndProviderEventId(
+                PaymentProvider.MERCADO_PAGO, "mp-order-1:created:null"))
+                .thenReturn(true);
+
+        pagamentoService.atualizarPagamento(created);
+
+        verify(paymentEventRepository, never()).save(any());
+        verify(pagamentoRepository, never()).saveAndFlush(any());
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
     void cliqueDuplicadoRetornaMesmaCobrancaSemCriarOutraNoService() {
         Carrinho carrinho = new Carrinho();
         carrinho.setIdCarrinho("cart-1");

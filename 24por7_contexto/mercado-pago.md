@@ -63,7 +63,9 @@ Antes de criar ou reutilizar a cobrança, cada Produto do carrinho é recarregad
 O request contém:
 
 - `type: point`;
-- `external_reference`: referência única e persistida da tentativa;
+- `external_reference`: referência única e persistida da tentativa no formato
+  `{orderId}-{attemptNumber}`, limitada aos caracteres aceitos pela API (`A-Z`, `a-z`,
+  `0-9`, `-` e `_`) e a 64 posições;
 - `expiration_time: PT5M` na configuração atual, configurável por `MP_POINT_EXPIRATION_TIME`;
 - uma transação com o total;
 - `terminal_id` vindo de `Terminal.mercadoPagoTerminalId` e `print_on_terminal: no_ticket`;
@@ -77,6 +79,13 @@ A criação normal retorna `created` (também é tolerado `at_terminal` por já 
 A resposta é lida por `OrderResponse`. Campos desconhecidos são ignorados, mas `status` e `status_detail` chegam primeiro como strings; só valores conhecidos são convertidos para enums persistidos. Corpo nulo ou ID ausente tornam a criação inválida. Se chegar status futuro, o ID remoto ainda é salvo com estado local conservador `PENDING`; a transição é recusada até o status ser conhecido. `transactions` e `payments` podem estar ausentes/vazios sem causar NPE.
 
 O client HTTP compartilhado possui connect timeout de 5 segundos e read timeout de 15 segundos, ambos configuráveis. Erros e timeouts são convertidos em `ExternalServiceException`; a API devolve `502` sanitizado, sem reproduzir corpo externo sensível. O listener não engole mais exceções, portanto a transação/chamador não aparenta sucesso após falha externa.
+
+Tentativas locais antigas ainda não aceitas remotamente, geradas como
+`{orderId}:{attemptNumber}`, são normalizadas antes da recuperação, junto com a rotação da chave
+de idempotência que o provedor já associou ao payload inválido. Referências de
+tentativas que já possuem `providerOrderId` não são alteradas, preservando a correlação de
+webhooks. A carga de reconciliação inicializa também `Terminal -> Condomínio -> Empresa`, pois o
+reenvio executado pelo scheduler não dispõe da sessão web que antes mascarava associações lazy.
 
 O início Point registra marcos `[PAYMENT-BACKEND]` para request recebido, Order/tentativa criada ou reutilizada, chamada e resposta do Mercado Pago, status remoto, tentativa persistida e resposta ao Terminal. IDs operacionais podem aparecer; tokens e credenciais nunca são registrados.
 

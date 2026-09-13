@@ -64,7 +64,7 @@ public class Order {
     private OrderStatus status = OrderStatus.PENDING;
     @Version
     @Column(nullable = false)
-    private Long version = 0L;
+    private Long version;
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
     @Column(name = "updated_at", nullable = false)

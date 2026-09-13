@@ -88,6 +88,9 @@ class OrderServiceTest {
 
         Order order = service.createOrder("carrinho-a", null);
 
+        assertThat(order.getVersion())
+                .as("entidades novas devem usar persist, não merge")
+                .isNull();
         assertThat(item.getProduto()).isSameAs(produtoCompleto);
         assertThat(order.getItems()).hasSize(1);
         OrderItem snapshot = order.getItems().get(0);

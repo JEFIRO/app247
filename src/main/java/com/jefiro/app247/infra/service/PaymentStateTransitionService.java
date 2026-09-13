@@ -65,6 +65,13 @@ public class PaymentStateTransitionService {
                     order.getIdOrder(), data.version(), pagamento.getProviderEventVersion());
             return false;
         }
+        String providerEventId = providerEventId(data);
+        if (paymentEventRepository.existsByProviderAndProviderEventId(
+                pagamento.getProvider(), providerEventId)) {
+            log.info("Evento Mercado Pago duplicado ignorado: orderId={}, providerEventId={}",
+                    order.getIdOrder(), providerEventId);
+            return false;
+        }
 
         OrderStatus localStatus = order.getStatus();
         boolean stateChanged = localStatus != remoteStatus;
@@ -117,7 +124,7 @@ public class PaymentStateTransitionService {
         pagamento.setProviderEventAt(parseDate(data.eventDate()));
 
         pagamentoRepository.saveAndFlush(pagamento);
-        registrarEvento(pagamento, pagamentoAnterior, data, remoteStatus);
+        registrarEvento(pagamento, pagamentoAnterior, data, remoteStatus, providerEventId);
         orderService.save(order);
         if (order.getCarrinho() != null) carrinhoService.save(order.getCarrinho());
         if (domainEvent != null) eventPublisher.publishEvent(domainEvent);
@@ -130,7 +137,8 @@ public class PaymentStateTransitionService {
     }
 
     private void registrarEvento(PaymentAttempt attempt, PagamentoStatus anterior,
-                                  MercadoPagoOrderState data, OrderStatus remoteStatus) {
+                                  MercadoPagoOrderState data, OrderStatus remoteStatus,
+                                  String providerEventId) {
         com.jefiro.app247.domain.model.PaymentEvent event = new com.jefiro.app247.domain.model.PaymentEvent();
         event.setPaymentAttempt(attempt);
         event.setEmpresa(attempt.getEmpresa());
@@ -138,12 +146,17 @@ public class PaymentStateTransitionService {
         event.setEventType("ORDER_" + remoteStatus.name());
         event.setStatusAnterior(anterior);
         event.setStatusNovo(attempt.getStatus());
-        event.setProviderEventId(data.mercadoPagoOrderId() + ":" +
-                (data.version() != null ? data.version() : data.status() + ":" + data.eventDate()));
+        event.setProviderEventId(providerEventId);
         event.setProviderVersion(data.version());
         Instant occurred = parseDate(data.eventDate());
         event.setOccurredAt(occurred != null ? occurred : Instant.now());
         paymentEventRepository.save(event);
+    }
+
+    private String providerEventId(MercadoPagoOrderState data) {
+        return data.mercadoPagoOrderId() + ":"
+                + (data.version() != null
+                ? data.version() : data.status() + ":" + data.eventDate());
     }
 
     private boolean isStale(PaymentAttempt attempt, Integer receivedVersion) {

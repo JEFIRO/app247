@@ -72,6 +72,13 @@ Antes de criar Order/PaymentAttempt e novamente antes do HTTP para o Mercado Pag
 
 Qualquer divergência produz `MERCADO_PAGO_NOT_CONFIGURED` e a API externa não é chamada.
 
+A consulta usada pelo bootstrap do Terminal é deliberadamente não excepcional: ausência de
+lease, token expirado ou Point incompatível retorna `paymentConfigured=false`. Ela não chama
+o caminho `requireConfigured`, porque uma exceção de negócio atravessando um service
+transacional marcaria a transação de leitura como rollback-only mesmo quando capturada pelo
+bootstrap. O caminho de cobrança continua usando `requireConfigured` e retorna
+`MERCADO_PAGO_NOT_CONFIGURED` quando a configuração é obrigatória.
+
 ## Estado administrativo
 
 `GET /mercado-pago/status` preserva os booleanos existentes e acrescenta `contaStatus`: `CONTA_NAO_VINCULADA`, `CONTA_VINCULADA`, `CONTA_VINCULADA_SEM_POINT`, `POINT_CONFIGURADA`, `CONTA_REVOGADA` ou `CONTA_COM_ERRO`.

@@ -11,6 +11,7 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Getter
 @Setter
@@ -23,6 +24,9 @@ import java.util.UUID;
         @UniqueConstraint(name = "uk_payment_provider_order", columnNames = {"provider", "provider_order_id"}),
         @UniqueConstraint(name = "uk_payment_provider_payment", columnNames = {"provider", "provider_payment_id"})})
 public class PaymentAttempt {
+    private static final Pattern EXTERNAL_REFERENCE_PATTERN =
+            Pattern.compile("[A-Za-z0-9_-]{1,64}");
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", columnDefinition = "char(36)", length = 36, nullable = false)
@@ -115,12 +119,41 @@ public class PaymentAttempt {
         updatedAt = now;
         if (attemptNumber == null) attemptNumber = 1;
         if (idempotencyKey == null) idempotencyKey = "attempt-" + UUID.randomUUID();
-        if (externalReference == null)
-            externalReference = (order != null ? order.getIdOrder() : "order") + ":" + attemptNumber;
+        if (externalReference == null || externalReference.isBlank()) {
+            externalReference = generatedExternalReference();
+        }
+        normalizeLegacyExternalReference();
+        validateExternalReference();
     }
 
     @PreUpdate
     void preUpdate() {
+        normalizeLegacyExternalReference();
+        if (providerOrderId == null) validateExternalReference();
         updatedAt = Instant.now();
+    }
+
+    private String generatedExternalReference() {
+        return (order != null && order.getIdOrder() != null
+                ? order.getIdOrder() : "order") + "-" + attemptNumber;
+    }
+
+    private void normalizeLegacyExternalReference() {
+        if (providerOrderId != null || order == null || order.getIdOrder() == null
+                || attemptNumber == null || externalReference == null) {
+            return;
+        }
+        String legacyReference = order.getIdOrder() + ":" + attemptNumber;
+        if (legacyReference.equals(externalReference)) {
+            externalReference = generatedExternalReference();
+            idempotencyKey = "attempt-" + UUID.randomUUID();
+        }
+    }
+
+    private void validateExternalReference() {
+        if (!EXTERNAL_REFERENCE_PATTERN.matcher(externalReference).matches()) {
+            throw new IllegalStateException(
+                    "External reference da tentativa não atende ao formato do Mercado Pago");
+        }
     }
 }

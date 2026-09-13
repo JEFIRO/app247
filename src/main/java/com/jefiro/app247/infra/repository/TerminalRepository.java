@@ -4,6 +4,7 @@ import com.jefiro.app247.domain.model.terminal.Terminal;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 
@@ -27,6 +28,7 @@ public interface TerminalRepository extends JpaRepository<Terminal, String> {
 
     List<Terminal> findAllByCondominioEmpresaIdOrderByNome(String empresaId);
 
+    @EntityGraph(attributePaths = {"condominio", "condominio.empresa"})
     Optional<Terminal> findByIdTerminalAndCondominioEmpresaId(String terminalId, String empresaId);
 
     Optional<Terminal> findByMercadoPagoTerminalId(String mercadoPagoTerminalId);

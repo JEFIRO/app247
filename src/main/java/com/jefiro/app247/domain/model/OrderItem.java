@@ -117,6 +117,14 @@ public class OrderItem {
 
     @PrePersist
     void prePersist() {
+        if (codigoInterno == null || codigoInterno.isBlank()) {
+            String codigoInternoProduto = produto != null ? produto.getCodigoInterno() : null;
+            if (codigoInternoProduto == null || codigoInternoProduto.isBlank()) {
+                throw new IllegalStateException(
+                        "OrderItem sem código interno e sem produto válido para recuperar o snapshot");
+            }
+            codigoInterno = codigoInternoProduto;
+        }
         if (createdAt == null) createdAt = Instant.now();
     }
     public BigDecimal getPrecoUnitarioAplicado() {
