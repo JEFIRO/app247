@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "estoque.md",
+                "file": "00-index.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "estoque"
+              "title": "00-index"
             }
           }
         ]
@@ -187,10 +187,22 @@
   },
   "active": "a9bd5c6320d173ef",
   "lastOpenFiles": [
+    "estoque.md",
+    "client-contracts.md",
+    "audit-log.md",
+    "fiscal-future.md",
+    "financial-rules.md",
+    "database-retention.md",
+    "database-er.md",
+    "database.md",
+    "database-melhorias.md",
+    "database-atual.md",
+    "telemetria.md",
+    "regras-financeiras.md",
+    "promocoes.md",
     "autenticacao.md",
     "melhorias.md",
     "mapa-projeto.md",
-    "estoque.md",
     "bugs.md",
     "banco-de-dados.md",
     "auditoria-bugs.md",
@@ -203,11 +215,7 @@
     "api.md",
     "contexto.md",
     "websocket.md",
-    "mercado-pago.md",
-    "auditoria-resumo.md",
-    "arquitetura.md",
     "00-index.md~",
-    "decisoes",
-    "Bem-vindo.md"
+    "decisoes"
   ]
 }
