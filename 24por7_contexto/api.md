@@ -108,7 +108,9 @@ negócio incluem `INVALID_LOYALTY_MODE`, `INVALID_LOYALTY_CONFIG`, `INVALID_REWA
 - Segurança: pública.
 - Body `AuthDTO`: `cpf` e `senha`, ambos obrigatórios.
 - Resposta `200`: `AuthResponse { token, user: UserResponseDTO }`.
-- Erros: `400` para validação; `401` para credenciais inválidas; outros erros não tratados podem virar `500`.
+- Erros: `400` para validação; `401` para credenciais inválidas; `429 LOGIN_RATE_LIMITED` quando o CPF
+  acumulou falhas (padrão 5 em 15 min, conta mesmo com a senha certa até a janela expirar; login bem-sucedido
+  zera) ou a origem passou de 50 tentativas em 15 min. Vale também para `/auth/login/admin`.
 - Efeitos: autenticação via `AuthenticationManager`; não altera `ultimoLogin`.
 - Tenant: `empresaId` é incluído no token a partir do usuário.
 
@@ -118,7 +120,7 @@ negócio incluem `INVALID_LOYALTY_MODE`, `INVALID_LOYALTY_CONFIG`, `INVALID_REWA
 - Finalidade: login exclusivo de gestor.
 - Segurança: pública; a role é verificada depois da senha.
 - Body/saída: os mesmos de `/auth/login`.
-- Resposta: `200`; `401` para credenciais inválidas; `403` se não for `ADMIN`/`GERENTE`.
+- Resposta: `200`; `401` para credenciais inválidas; `403` se não for `ADMIN`/`GERENTE`; `429` como em `/auth/login`.
 - Efeito: emite o mesmo tipo de JWT.
 
 ## POST /auth/register
@@ -157,6 +159,7 @@ negócio incluem `INVALID_LOYALTY_MODE`, `INVALID_LOYALTY_CONFIG`, `INVALID_REWA
   `nome` obrigatório, até 100; `code` é ignorado. Inválido → `400 VALIDATION_ERROR`.
 - Resposta: `200` vazio.
 - O `nome` entra no HTML do e-mail com escape (`EmailService.html`).
+- `429 EMAIL_CODE_RATE_LIMITED`: padrão 3 envios por e-mail e 20 por origem a cada 15 min.
 - Efeitos: grava `email_validation_queue:{email}` com TTL de 15 minutos e enfileira na lista Redis homônima.
 - Observação: não marca `User.emailVerificado`.
 
@@ -168,7 +171,9 @@ negócio incluem `INVALID_LOYALTY_MODE`, `INVALID_LOYALTY_CONFIG`, `INVALID_REWA
 - Body (grupo `VerifyCode`): `email` obrigatório; `code` obrigatório com 6 dígitos; `nome` opcional.
   Inválido → `400 VALIDATION_ERROR`.
 - Resposta: `200` vazio.
-- Erros: código expirado/inválido (`ExpiredCodeException`/`InvalidCodeException`).
+- Erros: código expirado/inválido (`ExpiredCodeException`/`InvalidCodeException`); `429 EMAIL_CODE_RATE_LIMITED`
+  após 5 tentativas sem acerto por e-mail em 15 min; nesse momento o código atual é apagado e é preciso
+  pedir outro. Acerto zera o contador.
 - Efeito: remove a chave Redis quando válido.
 
 # Recuperação e usuários
@@ -263,7 +268,8 @@ negócio incluem `INVALID_LOYALTY_MODE`, `INVALID_LOYALTY_CONFIG`, `INVALID_REWA
 - Body `CadastroCompletoRequest`: `gestor` (alias `user`), `empresa`, `condominio`, `terminal`.
 - Resposta `201 OnboardingResponse`: IDs do gestor, empresa, condomínio e terminal.
 - Efeitos: cria toda a hierarquia em uma transação; gestor recebe `ADMIN` e senha BCrypt.
-- Erros: validação `400`, conflitos de CPF/CNPJ/email/serial conforme constraints; parte dos conflitos vira `500`.
+- Erros: validação `400`, conflitos de CPF/CNPJ/email/serial conforme constraints; parte dos conflitos vira `500`;
+  `429 ONBOARDING_RATE_LIMITED` após 5 cadastros válidos da mesma origem por hora (corpo inválido não conta).
 
 ## GET /empresas/{empresaId}
 

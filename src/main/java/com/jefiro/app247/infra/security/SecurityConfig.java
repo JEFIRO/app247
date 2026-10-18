@@ -83,10 +83,12 @@ public class SecurityConfig {
                                 case "COMPANY_NOT_FOUND" -> "Empresa do token não está disponível";
                                 case "USER_DISABLED" -> "Usuário desativado";
                                 case "TERMINAL_AUTH_INVALID" -> "Credencial do Terminal inválida";
+                                case "TOKEN_INVALID" -> "Token inválido ou expirado";
                                 case "AUTH_REQUIRED" -> "Autenticação obrigatória";
                                 default -> "Acesso negado";
                             };
                             HttpStatus status = code.equals("TERMINAL_AUTH_INVALID")
+                                    || code.equals("TOKEN_INVALID")
                                     || code.equals("AUTH_REQUIRED")
                                     ? HttpStatus.UNAUTHORIZED : HttpStatus.FORBIDDEN;
                             response.setStatus(status.value());

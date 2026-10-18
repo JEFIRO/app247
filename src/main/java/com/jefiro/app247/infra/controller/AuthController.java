@@ -5,6 +5,8 @@ import com.jefiro.app247.domain.model.dto.auth.AuthDTO;
 import com.jefiro.app247.domain.model.dto.auth.ClientRegistrationRequest;
 import com.jefiro.app247.domain.model.dto.auth.ClientRegistrationResponse;
 import com.jefiro.app247.infra.exception.ApiBusinessException;
+import com.jefiro.app247.infra.exception.InvalidPasswordException;
+import com.jefiro.app247.infra.service.PublicAuthRateLimits;
 import com.jefiro.app247.infra.service.RegistrationRateLimiter;
 import com.jefiro.app247.infra.service.RegistrationService;
 import com.jefiro.app247.infra.service.UserService;
@@ -18,28 +20,34 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.function.Supplier;
+
 @RestController
 @RequestMapping("auth")
 public class AuthController {
     private final UserService users;
     private final RegistrationService registrations;
     private final RegistrationRateLimiter rateLimiter;
+    private final PublicAuthRateLimits authLimits;
 
     public AuthController(UserService users, RegistrationService registrations,
-                          RegistrationRateLimiter rateLimiter) {
+                          RegistrationRateLimiter rateLimiter, PublicAuthRateLimits authLimits) {
         this.users = users;
         this.registrations = registrations;
         this.rateLimiter = rateLimiter;
+        this.authLimits = authLimits;
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody @Valid AuthDTO auth) {
-        return ResponseEntity.ok(users.login(auth));
+    @ApiResponse(responseCode = "429", description = "LOGIN_RATE_LIMITED")
+    public ResponseEntity<?> login(@RequestBody @Valid AuthDTO auth, HttpServletRequest request) {
+        return ResponseEntity.ok(limitedLogin(auth, request, () -> users.login(auth)));
     }
 
     @PostMapping("/login/admin")
-    public ResponseEntity<?> loginAdmin(@RequestBody @Valid AuthDTO auth) {
-        return ResponseEntity.ok(users.loginAdmin(auth));
+    @ApiResponse(responseCode = "429", description = "LOGIN_RATE_LIMITED")
+    public ResponseEntity<?> loginAdmin(@RequestBody @Valid AuthDTO auth, HttpServletRequest request) {
+        return ResponseEntity.ok(limitedLogin(auth, request, () -> users.loginAdmin(auth)));
     }
 
     @PostMapping("/register")
@@ -60,23 +68,44 @@ public class AuthController {
     }
 
     @PostMapping("/send-code")
+    @ApiResponse(responseCode = "429", description = "EMAIL_CODE_RATE_LIMITED")
     public ResponseEntity<?> sendCode(
-            @RequestBody @Validated(ValidateEmailRequest.SendCode.class) ValidateEmailRequest request) {
+            @RequestBody @Validated(ValidateEmailRequest.SendCode.class) ValidateEmailRequest request,
+            HttpServletRequest httpRequest) {
+        authLimits.beforeSendCode(clientIp(httpRequest), request.getEmail());
         users.sendCode(request);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/validate-code")
+    @ApiResponse(responseCode = "429", description = "EMAIL_CODE_RATE_LIMITED")
     public ResponseEntity<?> validateCode(
             @RequestBody @Validated(ValidateEmailRequest.VerifyCode.class) ValidateEmailRequest request) {
+        if (!authLimits.tryValidateCode(request.getEmail())) {
+            // Esgotou as tentativas: o código atual deixa de valer, exigindo um novo envio.
+            users.invalidarCode(request.getEmail());
+            throw authLimits.validateCodeLimited();
+        }
         users.verificarCode(request);
+        authLimits.codeValidated(request.getEmail());
         return ResponseEntity.ok().build();
     }
 
+    private <T> T limitedLogin(AuthDTO auth, HttpServletRequest request, Supplier<T> login) {
+        authLimits.beforeLogin(clientIp(request), auth.cpf());
+        try {
+            T response = login.get();
+            authLimits.loginSucceeded(auth.cpf());
+            return response;
+        } catch (InvalidPasswordException failure) {
+            authLimits.loginFailed(auth.cpf());
+            throw failure;
+        }
+    }
+
+    // Com server.forward-headers-strategy=framework, getRemoteAddr já reflete X-Forwarded-For.
+    // Só é confiável atrás de um proxy que sobrescreva esse header (nginx).
     private String clientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        return forwarded == null || forwarded.isBlank()
-                ? request.getRemoteAddr()
-                : forwarded.split(",", 2)[0].trim();
+        return request.getRemoteAddr();
     }
 }

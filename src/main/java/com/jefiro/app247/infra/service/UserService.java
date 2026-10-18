@@ -250,6 +250,10 @@ public class UserService {
         redisTemplate.opsForValue().set("email_validation_queue:" + email.getEmail(), code, Duration.ofMinutes(15));
     }
 
+    public void invalidarCode(String email) {
+        redisTemplate.delete("email_validation_queue:" + email);
+    }
+
     @Transactional
     public void verificarCode(ValidateEmailRequest emailValidate) {
         String recovery = (String) redisTemplate.opsForValue().get("email_validation_queue:" + emailValidate.getEmail());

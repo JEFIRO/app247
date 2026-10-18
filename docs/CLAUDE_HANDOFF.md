@@ -315,6 +315,9 @@ git diff --check              → apenas linha em branco extra no fim de .env.ex
 - Secrets: `.env`/`.env.*` ignorados; `application*.properties` só referenciam variáveis. Documentação antiga registra
   que segredos chegaram a ser versionados no histórico → **rotação externa ainda pendente** (não verificável aqui).
 - JWT com TTL fixo de **200 h** (`TokenService`), sem issuer/audience/refresh/revogação (pendência P3).
+  Token inválido/expirado responde 401 `TOKEN_INVALID`.
+- Limites (18/10/2026): login por CPF/origem, send-code e validate-code por e-mail/origem, onboarding por
+  origem (`PublicAuthRateLimits`). Gestor não altera e-mail de terceiros e GERENTE não altera ADMIN.
 - Endpoints de teste MP (chamadas reais): opt-in por `TEST_ENDPOINTS_ENABLED=true`, nunca em `prod`, exigem
   ADMIN/GERENTE. A classe ainda é compilada no jar.
 - Migração legada de credencial (`/terminal/*/credential/migrate`, `TERMINAL_INTERNAL_TOKEN`) removida em
@@ -360,7 +363,7 @@ Corrigidas em 14/10/2026 após verificação no código:
 4. **Preflight V16** e validação do Flyway contra cópia dos bancos implantados.
 5. ~~Perfil `dev`~~ e ~~endpoints de teste ligados por padrão~~ — resolvidos em 14/10/2026.
 6. Opcional: tirar `TestarWebhookMP*` do jar de produção (hoje só não é registrado).
-7. JWT: TTL configurável, 401 estruturado para token inválido, decisão sobre refresh/revogação.
+7. JWT: TTL configurável e decisão sobre refresh/revogação (401 `TOKEN_INVALID` para token inválido feito em 18/10/2026).
 8. Refresh automático do token OAuth Mercado Pago.
 9. Recuperação automática de mensagens presas em `processing` no Redis.
 10. Produto: cashback consumível, ledger de pontos tipado, workflow de suporte, termos/privacidade com aceite,
@@ -376,4 +379,4 @@ Corrigidas em 14/10/2026 após verificação no código:
    e então `git push origin master` (dispara testes e deploy).
 2. Acompanhar a primeira execução do workflow com o job `test`.
 3. Seguir `24por7_contexto/backend-pending.md`: P1 preflight V16 (script de verificação de CPF/e-mail duplicados
-   antes do deploy) → P3 JWT (401 estruturado, TTL configurável) → P2.
+   antes do deploy) → P3 JWT (TTL configurável) → P2.

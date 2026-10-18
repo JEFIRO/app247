@@ -138,4 +138,7 @@ Após persistir um usuário, `UserService` publica `UserCreatedEvent`. `UserList
 - As propriedades sensíveis atuais foram externalizadas. Valores que já existiram no repositório devem ser considerados expostos e ainda precisam de rotação fora do código.
 - A propriedade de segredo JWT e credenciais SMTP/Mercado Pago estão configuradas por propriedades; valores não são reproduzidos aqui.
 - O JWT tem validade extensa de 200 horas e não há refresh token ou revogação.
+- Token inválido ou expirado não derruba a requisição: `SecurityFilter` segue anônimo com código
+  `TOKEN_INVALID`; rota protegida responde `401 {code: TOKEN_INVALID}` e rota pública funciona normalmente
+  (antes a exceção escapava do filtro e virava `500`).
 - Estado OAuth é temporário no Redis, validado antes da busca do usuário e removido após troca bem-sucedida; veja [[mercado-pago]].

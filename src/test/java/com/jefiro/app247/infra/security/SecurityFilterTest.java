@@ -111,14 +111,17 @@ class SecurityFilterTest {
     }
 
     @Test
-    void jwtInvalidoPreservaFalhaAtualELimpaContexto() {
+    void jwtInvalidoSegueAnonimoComCodigoTokenInvalidoELimpaContexto() throws Exception {
         when(tokenService.validateIdentity("invalid")).thenThrow(new RuntimeException("JWT inválido"));
+        MockHttpServletRequest request = request("/admin/dashboard", "invalid");
+        AtomicBoolean chainCalled = new AtomicBoolean();
 
-        RuntimeException failure = assertThrows(RuntimeException.class,
-                () -> filter.doFilterInternal(request("/admin/dashboard", "invalid"),
-                        new MockHttpServletResponse(), (ignoredRequest, ignoredResponse) -> fail()));
+        filter.doFilterInternal(request, new MockHttpServletResponse(),
+                (ignoredRequest, ignoredResponse) -> chainCalled.set(true));
 
-        assertEquals("JWT inválido", failure.getMessage());
+        assertTrue(chainCalled.get());
+        assertEquals("TOKEN_INVALID", request.getAttribute(SecurityFilter.FAILURE_CODE_ATTRIBUTE));
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
         assertNull(EmpresaContext.get());
         verifyNoInteractions(repository);
     }

@@ -34,8 +34,16 @@ public class SecurityFilter extends OncePerRequestFilter {
         var token = recoverToken(request);
         try {
 
+            TokenService.TokenIdentity tokenIdentity = null;
             if (token != null) {
-                var tokenIdentity = tokenService.validateIdentity(token);
+                try {
+                    tokenIdentity = tokenService.validateIdentity(token);
+                } catch (RuntimeException invalid) {
+                    // Assinatura inválida ou token expirado: segue anônimo; rota protegida responde 401.
+                    request.setAttribute(FAILURE_CODE_ATTRIBUTE, "TOKEN_INVALID");
+                }
+            }
+            if (tokenIdentity != null) {
                 var identity = repository.findSecurityIdentityByCpf(tokenIdentity.subject()).orElse(null);
 
                 if (identity != null && identidadeConfereComToken(identity, tokenIdentity, request)) {
