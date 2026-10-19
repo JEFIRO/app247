@@ -39,6 +39,9 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Setup Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -47,6 +50,7 @@ jobs:
         with:
           context: .
           push: true
+          platforms: linux/arm64
           tags: |
             jefiroo/app247-backend:latest
             jefiroo/app247-backend:${{ github.sha }}
@@ -54,19 +58,19 @@ jobs:
       - name: Configurar SSH
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
-          chmod 600 ~/.ssh/ec2_key
-          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+          printf '%s\n' "${{ secrets.ORACLE_SSH_KEY }}" > ~/.ssh/oracle_key
+          chmod 600 ~/.ssh/oracle_key
+          ssh-keyscan -H "${{ secrets.ORACLE_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Verificar chave SSH
         run: |
           echo "Fingerprint da chave usada pelo GitHub:"
-          ssh-keygen -y -f ~/.ssh/ec2_key | ssh-keygen -lf -
+          ssh-keygen -y -f ~/.ssh/oracle_key | ssh-keygen -lf -
 
-      - name: Deploy na EC2
+      - name: Deploy na Oracle
         run: |
-          ssh -i ~/.ssh/ec2_key \
-          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          ssh -i ~/.ssh/oracle_key \
+          ${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }} << 'EOF'
 
             cd ~/app247
 
