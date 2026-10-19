@@ -35,8 +35,11 @@ public class PromocaoService {
         Promocao salva = promocaoRepository.saveAndFlush(promocao);
         auditLogService.record(salva.getEmpresa(), "PROMOTION_CREATED", "Promocao", salva.getIdPromocao(),
                 null, Map.of("nome", salva.getNome(), "abrangencia", salva.getAbrangencia().name()), Map.of());
+        // notificar() roda touchCatalog com clearAutomatically: a resposta precisa ser montada
+        // antes, enquanto Promocao e Produto ainda estão anexados à sessão.
+        PromocaoResponse resposta = response(salva);
         notificar(destinos(salva), ProdutoCatalogChangeReason.PROMOTION_CREATED);
-        return response(salva);
+        return resposta;
     }
 
     @Transactional
@@ -48,8 +51,9 @@ public class PromocaoService {
         Promocao salva = promocaoRepository.saveAndFlush(promocao);
         auditLogService.record(salva.getEmpresa(), "PROMOTION_UPDATED", "Promocao", salva.getIdPromocao(),
                 null, Map.of("nome", salva.getNome(), "abrangencia", salva.getAbrangencia().name()), Map.of());
+        PromocaoResponse resposta = response(salva);
         notificar(merge(antes, destinos(salva)), ProdutoCatalogChangeReason.PROMOTION_UPDATED);
-        return response(salva);
+        return resposta;
     }
 
     @Transactional
@@ -61,8 +65,9 @@ public class PromocaoService {
         Promocao salva = promocaoRepository.saveAndFlush(promocao);
         auditLogService.record(salva.getEmpresa(), ativo ? "PROMOTION_ACTIVATED" : "PROMOTION_DEACTIVATED",
                 "Promocao", salva.getIdPromocao(), null, Map.of("ativo", ativo), Map.of());
+        PromocaoResponse resposta = response(salva);
         notificar(destinos(salva), ProdutoCatalogChangeReason.PROMOTION_STATUS_CHANGED);
-        return response(salva);
+        return resposta;
     }
 
     @Transactional(readOnly = true)
