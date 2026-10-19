@@ -67,15 +67,47 @@ jobs:
           echo "Fingerprint da chave usada pelo GitHub:"
           ssh-keygen -y -f ~/.ssh/oracle_key | ssh-keygen -lf -
 
+      # deploy/docker-compose.yml é a fonte única do compose de produção. Vai para a pasta do
+      # servidor junto com deploy/nginx/ (montado pelo serviço nginx como ./nginx/...).
+      # O .env de produção já está no servidor e não é enviado.
+      - name: Enviar compose e configuração do nginx
+        run: |
+          REMOTE="${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }}"
+          ssh -i ~/.ssh/oracle_key "$REMOTE" \
+            'set -e; mkdir -p ~/projetos/back-app247; cd ~/projetos/back-app247;
+             if [ -f docker-compose.yml ]; then cp docker-compose.yml docker-compose.yml.bak; fi;
+             rm -rf nginx.new'
+          scp -i ~/.ssh/oracle_key deploy/docker-compose.yml \
+            "$REMOTE":~/projetos/back-app247/docker-compose.yml.new
+          scp -i ~/.ssh/oracle_key -r deploy/nginx \
+            "$REMOTE":~/projetos/back-app247/nginx.new
+
       - name: Deploy na Oracle
         run: |
           ssh -i ~/.ssh/oracle_key \
           ${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }} << 'EOF'
+            set -e
+            cd ~/projetos/back-app247
 
-            cd ~/app247
+            # Só troca os arquivos depois de validar o compose novo com o .env do servidor.
+            docker compose -f docker-compose.yml.new config -q
+            mv docker-compose.yml.new docker-compose.yml
+            rm -rf nginx.old
+            if [ -d nginx ]; then mv nginx nginx.old; fi
+            mv nginx.new nginx
 
             docker compose pull app
             docker compose up -d --no-deps app
+
+            # Valida a config do nginx antes de recriá-lo; se falhar, volta a anterior.
+            if ! docker compose run --rm --no-deps -T nginx nginx -t; then
+              echo "Configuração do nginx inválida; restaurando a anterior"
+              rm -rf nginx && mv nginx.old nginx
+              exit 1
+            fi
+            # Bind mount fixa o diretório da criação do container: recria para ler a pasta nova.
+            docker compose up -d --no-deps --force-recreate nginx
+            docker compose up -d --no-deps ngrok
 
             docker image prune -f
             docker compose ps

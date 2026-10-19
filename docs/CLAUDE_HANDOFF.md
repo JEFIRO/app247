@@ -31,6 +31,10 @@ working tree**. Agora estão no commit `869f575` (local).
 - `origin/master` ainda termina a cadeia de segurança com `.anyRequest().permitAll()` e só tem as migrations
   V1–V13. Se algo foi implantado a partir de `origin/master`, o ambiente implantado tem rotas HTTP abertas.
   Não foi possível verificar o que está de fato rodando na EC2.
+- Entrada pública (19/10/2026): ngrok → nginx (`deploy/nginx/`) → app; app e painel do ngrok só em
+  `127.0.0.1`. Compose de produção é `deploy/docker-compose.yml` (fonte única); o workflow o envia com
+  `deploy/nginx/` para `~/projetos/back-app247` no servidor Oracle e recria app, nginx e ngrok
+  (ver `24por7_contexto/nginx.md`).
 - Push em `master` dispara `.github/workflows/docker-publish.yml`: o job `test` (`./mvnw test`) roda primeiro e o
   job `deploy` (`needs: test`) faz build da imagem `jefiroo/app247-backend` (Dockerfile usa `-DskipTests`) e
   **deploy automático via SSH na EC2** (`docker compose pull app && up -d`).
@@ -128,7 +132,7 @@ Executar localmente: suba MySQL/Redis com `docker compose -f docker-compose.test
 (`scripts/e2e-terminal-backend.sh:75-88`).
 
 Compose:
-- `docker-compose.yml`: só `app` + `redis` + `comprovante-service`; banco **externo** via `DB_URL`
+- `deploy/docker-compose.yml`: `app` + `nginx` + `ngrok` + `redis` + `comprovante-service`; banco **externo** via `DB_URL`
   (formato de produção/EC2).
 - `docker-compose.test.yml`: stack completa com MySQL local.
 - `docker-compose.e2e.yml`: MySQL/Redis efêmeros em `tmpfs` para o E2E.

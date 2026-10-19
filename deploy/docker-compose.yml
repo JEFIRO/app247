@@ -1,3 +1,6 @@
+# Compose de produção (fonte única). O workflow envia este arquivo e deploy/nginx/ para
+# ~/projetos/back-app247 no servidor, junto do .env de produção.
+# Local: docker compose -f deploy/docker-compose.yml --env-file .env up -d
 name: app247
 
 services:
@@ -7,8 +10,9 @@ services:
 
     init: true
     restart: unless-stopped
+    # Só local: a entrada pública é ngrok -> nginx. Acesso direto via túnel SSH.
     ports:
-      - "${APP_PORT:-8080}:8080"
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
     environment:
       SPRING_PROFILES_ACTIVE: prod
       PORT: 8080
@@ -116,19 +120,50 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: app247-nginx
+    restart: unless-stopped
+    depends_on:
+      - app
+    volumes:
+      # Relativo à pasta do compose: no servidor, <pasta>/nginx/ (enviado pelo workflow).
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/snippets:/etc/nginx/snippets:ro
+    # Sem portas publicadas enquanto o TLS estiver no ngrok. Com domínio próprio:
+    # "80:80" e "443:443" + certificado (ver 24por7_contexto/nginx.md).
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=32m
+      - /var/run:size=1m
+      - /tmp:size=16m
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/nginx-health" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
   ngrok:
     image: ngrok/ngrok:latest
     container_name: ngrok
     restart: unless-stopped
     depends_on:
-      - app
+      - nginx
     command:
       - "http"
-      - "app:8080"
+      - "nginx:80"
     environment:
       NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    # Painel mostra todo o tráfego (senhas, tokens): só localhost, acesso via túnel SSH.
     ports:
-      - "4040:4040"
+      - "127.0.0.1:4040:4040"
   redis:
     image: redis:8-alpine
     restart: unless-stopped
