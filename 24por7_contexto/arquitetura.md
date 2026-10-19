@@ -64,7 +64,6 @@ Os tipos exatos de request/response são definidos pelos DTOs. A autorização H
 | `/mercado-pago` | início/callback OAuth e listagem tenant-aware de maquininhas; aliases legados permanecem em `/mp/oauth` |
 | `/terminais/{id}/mercado-pago` | vínculo e desvínculo entre terminal interno e maquininha Point |
 | `/webhook` | `POST /mercadopago` enfileira a notificação |
-| `/files` | upload e exposição estática de arquivos em `/files/**` |
 | `/api/testes/mercadopago` | cenários de simulação, listagem, cancelamento e limpeza de orders na API Mercado Pago |
 | `/app-cliente` | bootstrap, catálogo, compras/comprovante/suporte, identificação, fidelidade, recompensas, cupons e preferências; exige JWT `USER` |
 | `/terminal` | consumo autenticado dos QRs de identificação e cupom por segredo interno |
@@ -93,7 +92,7 @@ O agendamento é habilitado em `App247Application`. A cada dois segundos, worker
 
 - CORS aceita somente os padrões de origem de `APP_CORS_ALLOWED_ORIGIN_PATTERNS` (padrão `http://localhost:*,http://127.0.0.1:*`), com credenciais habilitadas; WebSocket usa a lista separada `WEBSOCKET_ALLOWED_ORIGINS`.
 - `ObjectMapper` é bean compartilhado; `RestTemplate` possui connect/read timeout configuráveis. Ainda não há interceptors ou clients externos dedicados.
-- uploads JPG/JPEG são gravados em `uploads/`, com nome baseado em hash parcial, timestamp e extensão; `/files/**` serve esse diretório.
+- imagens (JPEG/PNG) vão para o OCI Object Storage via API S3 (`ObjectStorageService`); o banco guarda a URL pública. Ver [[armazenamento-imagens]].
 - `@EnableAsync` ativa listeners assíncronos, especialmente e-mail e publicação STOMP.
 - OpenAPI/Swagger é fornecido por Springdoc e a raiz redireciona para a UI.
 

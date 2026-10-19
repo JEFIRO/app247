@@ -175,10 +175,10 @@ Catálogo detalhado com payloads: `24por7_contexto/api.md`; contratos com client
 
 | Acesso | Rotas |
 |---|---|
-| Público | `GET /`, `/error`, `/actuator/health`, `/terminal/health`, `/terminal/serial/*`, `/webhook/mercadopago` (HMAC próprio), `/mercado-pago/oauth/callback`, `/mp/oauth/callback`, `/public/leads`, `/public/app-config`, Swagger/OpenAPI, `POST /onboarding` e alias `POST /condominio`, `GET /files/**`, `POST /auth/{register,login,login/admin,send-code,validate-code}`, `POST /user/{recuperar,validar,redefinir-senha}` |
+| Público | `GET /`, `/error`, `/actuator/health`, `/terminal/health`, `/terminal/serial/*`, `/webhook/mercadopago` (HMAC próprio), `/mercado-pago/oauth/callback`, `/mp/oauth/callback`, `/public/leads`, `/public/app-config`, Swagger/OpenAPI, `POST /onboarding` e alias `POST /condominio`, `POST /auth/{register,login,login/admin,send-code,validate-code}`, `POST /user/{recuperar,validar,redefinir-senha}` |
 | Negado sempre | demais `/auth/**`, `GET /checkout` (vínculo legado por `userId`), `/checkout/session` |
 | `TERMINAL` | `/terminal-socket`, `/payment-socket/**`, `/ws/**`, `/produtos/sync`, `/produtos/home`, `/terminais/*/produtos-disponiveis`, `/terminal/telemetry`, `/terminal/*/bootstrap`, `/terminal/*/factory-reset/**`, `/terminal/customer-link/consume`, `/terminal/coupons/apply`, `/carrinho/**`, `/order/**`, `/pagamento/terminal/**`, `/checkout/carrinho`, `/checkout/qrcode`, `/comprovante/**` |
-| `ADMIN`/`GERENTE` | `/admin/**` (dashboard, alertas, pagamentos, vendas, atividade, **refund** `POST /admin/orders/{orderId}/refund`, App Cliente config/fidelidade/recompensas, convites de vínculo), `/empresas/**`, `/condominios/**` (incl. estoque por condomínio), `/terminais/**` (CRUD, credencial, vínculo Point, telemetria/monitoramento), `/produtos/**` (CRUD, importação XLSX), `/promocoes/**`, `/estoque-empresa/**`, `/estoque/geral`, `/transferencias-estoque/**`, `/inventarios/**`, `/planogramas/**`, `/mercado-pago/**`, `/mp/oauth/{mercadopago,terminal}/**`, `POST /files/upload`, `/api/testes/mercadopago/**` |
+| `ADMIN`/`GERENTE` | `/admin/**` (dashboard, alertas, pagamentos, vendas, atividade, **refund** `POST /admin/orders/{orderId}/refund`, App Cliente config/fidelidade/recompensas, convites de vínculo), `/empresas/**`, `/condominios/**` (incl. estoque por condomínio), `/terminais/**` (CRUD, credencial, vínculo Point, telemetria/monitoramento), `/produtos/**` (CRUD, importação XLSX), `/promocoes/**`, `/estoque-empresa/**`, `/estoque/geral`, `/transferencias-estoque/**`, `/inventarios/**`, `/planogramas/**`, `/mercado-pago/**`, `/mp/oauth/{mercadopago,terminal}/**`, `/api/testes/mercadopago/**` |
 | `USER` | `/app-cliente/**` (bootstrap, catálogo, compras, comprovante PNG/envio, tokens de identificação, fidelidade, recompensas/resgate, cupons/tokens, preferências, suporte, `tenant-link`), `/user/**` (alterar senha, foto, perfil, pedidos — com ownership/tenant via `HumanRequestAuthorizationService`) |
 
 Pontos de atenção da API:
@@ -246,7 +246,7 @@ Pontos de atenção da API:
 | Redis | filas, dedupe, rate limits, sessões | Desligado nos testes unitários; usado no E2E de 28/09 (não reexecutado). |
 | Terminal Python (outro repo) | HTTP + WebSocket com credencial individual | Contrato em `terminal-integration.md`; E2E de 28/09/2026 documentado em `e2e-terminal-backend.md` (não reexecutado aqui; doc cita "20 migrations", hoje são 22). |
 | Flutter admin / App Cliente (outros repos) | REST + JWT | Contratos em `client-contracts.md`, `app-cliente.md`, `flutter-backend-gap.md`. |
-| Armazenamento de arquivos | `uploads/` local, servido em `GET /files/**` | Local ao container (volume). |
+| Armazenamento de imagens | OCI Object Storage via API S3 (`ObjectStorageService`), URL pública no banco | Bucket precisa de leitura pública. |
 
 ---
 
@@ -330,7 +330,6 @@ git diff --check              → apenas linha em branco extra no fim de .env.ex
   `TERMINAL_CREDENTIAL_ORIGIN_CHANGED` (`TerminalCredentialAnomalyService`); só alerta, não bloqueia.
 - Cadastro de cliente usa `X-Forwarded-For` para rate limit (`AuthController.clientIp`), enquanto a recuperação de
   senha usa só `getRemoteAddr()` — inconsistência; `X-Forwarded-For` é falsificável sem proxy confiável.
-- `GET /files/**` é público (imagens de produto/foto).
 
 ---
 

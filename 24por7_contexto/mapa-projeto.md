@@ -71,7 +71,7 @@ Todas as rotas estão descritas em [[api]].
 - Identidade: `UserService`, `TokenService`, `EmailService`, `EmailWorker`.
 - Compra: `ProdutoService`, `CarrinhoService`, `OrderService`, `PagamentoService`, `EstoqueService`.
 - Mercado Pago: `OauthMercadoPagoService`, `MercadoPagoTerminalService`, `MercadoPagoCobrancaService`, `MercadoPagoOrderQueryService`, `MercadoPagoWebhookSignatureService`, `MercadoPagoService`, `TestarWebhookMP`.
-- Infraestrutura: `CheckoutSessionService`, `FileStorageService`, `QRCodeService`, `PaymentWorker`, `PaymentSocketService`.
+- Infraestrutura: `CheckoutSessionService`, `ObjectStorageService`, `QRCodeService`, `PaymentWorker`, `PaymentSocketService`.
 
 Não há serviço de PIX/Checkout Pro (a antiga `MercadoPagoService` foi removida). `TestarWebhookMP` continua compilado, mas seu controller só é registrado com `app.test-endpoints.enabled=true` (padrão `false`) e nunca no profile `prod`.
 
@@ -89,7 +89,6 @@ Não há serviço de PIX/Checkout Pro (a antiga `MercadoPagoService` foi removid
 - `CorsConfig`: CORS global permissivo.
 - `RedisConfig`: JSON para valores e strings para chaves.
 - `Config`: `ObjectMapper` e `RestTemplate` com connect/read timeout configuráveis.
-- `WebConfig`: `/files/**` sobre filesystem local.
 - `TerminalWebSocketConfig` e `WebSocketConfig`: WebSocket nativo e STOMP.
 
 ## Eventos e jobs

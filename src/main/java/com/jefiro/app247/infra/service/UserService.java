@@ -31,7 +31,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.io.IOException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Locale;
@@ -55,7 +54,7 @@ public class UserService {
     @Autowired
     private ApplicationEventPublisher publisher;
     @Autowired
-    FileStorageService fileStorageService;
+    ObjectStorageService objectStorageService;
     @Autowired
     CondominioRepository condominioRepository;
     @Autowired
@@ -154,12 +153,10 @@ public class UserService {
 
     @Transactional
     public boolean salvarFoto(MultipartFile file, User user) {
-        try {
-            user.setFotoPerfil(fileStorageService.salvarArquivo(file));
-        } catch (IOException e) {
-            throw new FileStorageException("Falha ao armazenar foto do usuário", e);
-        }
+        String anterior = user.getFotoPerfil();
+        user.setFotoPerfil(objectStorageService.uploadImage(file, "usuarios/" + user.getIdUser()));
         repository.save(user);
+        objectStorageService.deleteAfterCommit(anterior);
 
         return true;
     }

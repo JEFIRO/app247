@@ -129,6 +129,20 @@
             <artifactId>java-jwt</artifactId>
             <version>4.5.2</version>
         </dependency>
+        <!-- OCI Object Storage via API compatível com S3. Fixado antes da 2.30, que passou a
+             enviar checksums CRC por padrão e não é aceita pelo endpoint S3 da Oracle. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.29.52</version>
+            <exclusions>
+                <!-- Só o cliente síncrono (Apache HTTP) é usado. -->
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
 
         <dependency>
             <groupId>com.mercadopago</groupId>

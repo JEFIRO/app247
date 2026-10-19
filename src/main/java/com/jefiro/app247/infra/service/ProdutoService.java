@@ -41,7 +41,7 @@ public class ProdutoService {
     @Autowired
     private PerfilTributarioRepository perfilTributarioRepository;
     @Autowired
-    private FileStorageService fileStorageService;
+    private ObjectStorageService objectStorageService;
     @Autowired
     EmpresaService empresaService;
     @Autowired
@@ -68,7 +68,7 @@ public class ProdutoService {
         String urlImagem = null;
 
         if (file != null && !file.isEmpty()) {
-            urlImagem = fileStorageService.salvarArquivo(file);
+            urlImagem = objectStorageService.uploadImage(file, "produtos/" + empresaId);
         }
 
         Produto produto = new Produto(produtoDTO);
@@ -154,13 +154,8 @@ public class ProdutoService {
         // IMAGEM
         // =========================
         if (file != null && !file.isEmpty()) {
-
-//            if (produto.getFoto() != null) {
-//                fileStorageService.deletarArquivo(produto.getFoto());
-//            }
-
-            String urlImagem = fileStorageService.salvarArquivo(file);
-            produto.setFoto(urlImagem);
+            objectStorageService.deleteAfterCommit(produto.getFoto());
+            produto.setFoto(objectStorageService.uploadImage(file, "produtos/" + empresaId));
         }
 
         Set<String> condominios = Set.copyOf(

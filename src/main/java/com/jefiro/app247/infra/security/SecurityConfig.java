@@ -47,7 +47,6 @@ public class SecurityConfig {
                                 "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html"
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/onboarding", "/condominio").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/files/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/auth/login/admin",
                                 "/auth/send-code", "/auth/validate-code").permitAll()
                         .requestMatchers(HttpMethod.POST, "/user/recuperar", "/user/validar",
@@ -68,7 +67,7 @@ public class SecurityConfig {
                                 "/estoque/geral", "/transferencias-estoque/**", "/inventarios/**",
                                 "/planogramas/**", "/mercado-pago/**",
                                 "/mp/oauth/mercadopago/**", "/mp/oauth/terminal/**",
-                                "/files/**", "/api/testes/mercadopago/**"
+                                "/api/testes/mercadopago/**"
                         ).hasAnyRole("ADMIN", "GERENTE")
                         .requestMatchers("/app-cliente/**").hasRole("USER")
                         .requestMatchers("/user/**").hasRole("USER")

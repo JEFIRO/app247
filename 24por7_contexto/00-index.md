@@ -74,6 +74,7 @@ Esta base descreve o backend conforme o código presente no repositório. O cód
 ## Integrações
 
 - [[mercado-pago]] — OAuth, Point Orders, webhook, filas Redis e fluxos de pagamento.
+- [[armazenamento-imagens]] — imagens no OCI Object Storage (API S3), limites e configuração.
 - [[mercado-pago-account-lifecycle]] — exclusividade ativa, histórico, reutilização, unlink e substituição de conta/Point.
 - [[payment-reconciliation]] — recuperação após backend/webhook offline, endpoint, scheduler, startup e idempotência.
 - [[payment-point-flow]] — loading curto, tela Point, cancelamento integral e proteção contra segunda cobrança.

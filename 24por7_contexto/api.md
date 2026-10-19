@@ -58,7 +58,6 @@ Esta é a segurança configurada atualmente em `SecurityConfig`. A tabela regist
 | `POST /carrinho` e rotas de pagamento/status/cancelamento do Terminal | não | não | `X-Terminal-Token` + identidade do Terminal |
 | demais `/carrinho/**`, checkout operacional e `/order/**` | não | não | device credential + ownership exato |
 | checkout móvel `/checkout` e `/checkout/session` | não | não | bloqueado/legado |
-| `GET /files/**` | sim | não | leitura pública; upload exige gestor |
 | `/api/testes/mercadopago/**` | não | sim | `ADMIN` ou `GERENTE` |
 | `/app-cliente/**` | não | sim | `USER` (inclui `ADMIN` e `GERENTE`) |
 | `/terminal/customer-link/consume`, `/terminal/coupons/apply` | não | não | device credential individual em `X-Terminal-Token` |
@@ -239,7 +238,9 @@ negócio incluem `INVALID_LOYALTY_MODE`, `INVALID_LOYALTY_CONFIG`, `INVALID_REWA
 - Segurança: JWT; somente o próprio usuário.
 - Entrada multipart: part `file`; query `id`.
 - Resposta: `200 true`.
-- Efeitos: grava JPG/JPEG em `uploads/` e altera `fotoPerfil` do ID informado.
+- Efeitos: envia JPEG/PNG (até 5 MB) ao OCI Object Storage e grava a URL pública em `fotoPerfil`; a foto
+  anterior é apagada após o commit. Erros: `400 IMAGE_INVALID`/`IMAGE_DIMENSIONS_INVALID`, `413 IMAGE_TOO_LARGE`,
+  `503 STORAGE_NOT_CONFIGURED`. Ver [[armazenamento-imagens]].
 - Tenant: identidade vem do principal.
 
 ## PUT /user/{id}
@@ -380,6 +381,8 @@ Os endpoints administrativos de `/produtos/**` estão públicos temporariamente 
 - Validação: `nome` até 180, `descricao` até 1000, `codigo`/`codigoInterno` até 80, preço até 9 inteiros e 6
   decimais, peso/tolerância até 12 inteiros e 3 decimais, `foto` até 500 e sem esquemas `javascript:`/`data:`/`vbscript:`.
 - Conflito: código já usado por outro produto da empresa retorna `409` antes de armazenar imagem.
+- Imagem: part `file` JPEG/PNG até 5 MB vai para o OCI Object Storage; `foto` passa a ser a URL pública.
+  No `PUT`, a imagem anterior é apagada após o commit. Ver [[armazenamento-imagens]].
 
 ## POST /produtos/save-list
 
@@ -791,18 +794,11 @@ O contrato entre Spring e Python e a operação Docker estão detalhados em [[co
 
 # Arquivos e documentação
 
-## POST /files/upload
+## Arquivos (removido)
 
-- Segurança: JWT `ADMIN` ou `GERENTE`.
-- Entrada: multipart parameter `file`, extensão `.jpg`/`.jpeg` e conteúdo decodificável como imagem; limite global 30 MB.
-- Resposta: URL textual relativa `/files/{nome}`.
-- Efeito: grava arquivo no filesystem local.
-
-## GET /files/{nome}
-
-- Não é controller: resource handler de `WebConfig`.
-- Segurança real: pública.
-- Resposta: conteúdo de `uploads/` quando existente.
+`POST /files/upload` e `GET /files/**` foram removidos em 19/10/2026 (nenhum app os chamava). Imagens vão
+para o OCI Object Storage pelos próprios endpoints de produto e de foto de perfil, e os campos `foto`/
+`fotoPerfil` guardam a URL pública completa. Ver [[armazenamento-imagens]].
 
 ## GET /
 

@@ -39,7 +39,7 @@ Não há código dos clientes neste repositório, portanto seus comportamentos a
 - SDK Java do Mercado Pago e chamadas REST diretas;
 - JavaMail para e-mails;
 - ZXing para QR Codes;
-- armazenamento de arquivos no diretório local `uploads/`.
+- armazenamento de imagens no OCI Object Storage (API compatível com S3).
 
 ## Hierarquia operacional e multi-tenant
 

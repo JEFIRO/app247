@@ -44,7 +44,7 @@ Spring Boot
 │   └── SDK para PIX/Checkout Pro não exposto
 ├── SMTP Gmail
 ├── Apache POI (modelo e leitura XLSX não confiável)
-├── filesystem local uploads/
+├── OCI Object Storage (imagens, API S3)
 └── WebSocket nativo + STOMP
 ```
 

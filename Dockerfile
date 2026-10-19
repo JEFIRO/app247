@@ -20,7 +20,7 @@ RUN apt-get update \
     && groupadd --gid 10001 app247 \
     && useradd --uid 10001 --gid app247 --no-create-home \
         --home-dir /app --shell /usr/sbin/nologin app247 \
-    && mkdir -p /app/uploads \
+    && mkdir -p /app \
     && chown -R app247:app247 /app
 
 WORKDIR /app

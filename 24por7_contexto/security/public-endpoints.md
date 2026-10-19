@@ -13,7 +13,6 @@
 | POST | `/webhook/mercadopago` | callback externo | assinatura/validação do provedor | idempotente |
 | GET | `/public/app-config` | configuração pública | leitura | sem segredo |
 | POST | `/public/leads` | captação pública | proteção própria | dados validados |
-| GET | `/files/**` | imagens públicas | somente leitura | upload exige gestor |
 | GET | `/`, `/actuator/health`, `/terminal/health` | documentação/saúde | sem estado sensível | health mínimo |
 | GET | `/v3/api-docs/**`, `/swagger-ui/**` | contrato OpenAPI | somente leitura | pode ser desabilitado por ambiente |
 | ANY | `/error` | dispatch interno de erro | sem controller de negócio | evita mascarar 404/500 |

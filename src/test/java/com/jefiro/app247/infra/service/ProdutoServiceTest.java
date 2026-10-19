@@ -35,7 +35,7 @@ class ProdutoServiceTest {
     @Mock ProdutoCodigoBarrasRepository codigoBarrasRepository;
     @Mock ProdutoFiscalRepository produtoFiscalRepository;
     @Mock PerfilTributarioRepository perfilTributarioRepository;
-    @Mock FileStorageService fileStorageService;
+    @Mock ObjectStorageService objectStorageService;
     @Mock EmpresaService empresaService;
     @Mock EstoqueCondominioRepository estoqueRepository;
     @Mock ApplicationEventPublisher eventPublisher;
@@ -63,7 +63,7 @@ class ProdutoServiceTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("409 CONFLICT")
                 .hasMessageContaining("Código interno já utilizado");
-        verifyNoInteractions(fileStorageService, empresaService);
+        verifyNoInteractions(objectStorageService, empresaService);
     }
 
     @Test
@@ -80,7 +80,7 @@ class ProdutoServiceTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("409 CONFLICT")
                 .hasMessageContaining("Código interno já utilizado");
-        verifyNoInteractions(fileStorageService, empresaService);
+        verifyNoInteractions(objectStorageService, empresaService);
     }
 
     @Test
@@ -98,7 +98,7 @@ class ProdutoServiceTest {
                     org.assertj.core.api.Assertions.assertThat(error.getReason())
                             .isEqualTo("Código de barras já está associado a outro produto.");
                 });
-        verifyNoInteractions(fileStorageService, empresaService);
+        verifyNoInteractions(objectStorageService, empresaService);
     }
 
     @Test
