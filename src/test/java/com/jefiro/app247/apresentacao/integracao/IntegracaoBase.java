@@ -44,7 +44,7 @@ import static org.mockito.Mockito.when;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
-abstract class IntegracaoBase {
+public abstract class IntegracaoBase {
 
     protected static final String SENHA = "senha123";
     protected final ObjectMapper json = new ObjectMapper();

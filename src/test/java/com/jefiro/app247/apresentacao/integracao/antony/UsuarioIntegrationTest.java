@@ -1,5 +1,6 @@
-package com.jefiro.app247.apresentacao.integracao;
+package com.jefiro.app247.apresentacao.integracao.antony;
 
+import com.jefiro.app247.apresentacao.integracao.IntegracaoBase;
 import com.jefiro.app247.domain.model.Empresa;
 import com.jefiro.app247.domain.model.auth.RoleUser;
 import com.jefiro.app247.domain.model.auth.User;

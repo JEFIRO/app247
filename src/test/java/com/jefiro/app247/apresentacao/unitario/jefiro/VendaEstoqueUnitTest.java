@@ -1,4 +1,4 @@
-package com.jefiro.app247.apresentacao.unitario;
+package com.jefiro.app247.apresentacao.unitario.jefiro;
 
 import com.jefiro.app247.domain.model.*;
 import com.jefiro.app247.domain.model.enum_type.TipoMovimentacaoEstoque;
@@ -49,11 +49,14 @@ class VendaEstoqueUnitTest {
     // tudo o que ele chama por fora é falso e controlado pelo teste.
 
     // Simula o estoque do condomínio; findForUpdate é a busca com lock pessimista usada na baixa.
-    @Mock EstoqueCondominioRepository estoqueRepository;
+    @Mock
+    EstoqueCondominioRepository estoqueRepository;
     // Simula o histórico de movimentações e a checagem de chave de idempotência.
-    @Mock MovimentacaoEstoqueRepository movimentacaoRepository;
+    @Mock
+    MovimentacaoEstoqueRepository movimentacaoRepository;
     // Classe testada de verdade: recebe os mocks acima no lugar das dependências reais.
-    @InjectMocks EstoqueService estoqueService;
+    @InjectMocks
+    EstoqueService estoqueService;
 
     private final Set<String> chavesGravadas = new HashSet<>();
     private EstoqueCondominio estoque;
@@ -62,6 +65,7 @@ class VendaEstoqueUnitTest {
     @BeforeEach
     void cenario() {
         // Estoque inicial: 10 unidades; pedido de 2 unidades do mesmo produto.
+
         Fixture f = fixture("10.000", "2.000");
         estoque = f.estoque();
         pedido = f.order();
@@ -75,26 +79,41 @@ class VendaEstoqueUnitTest {
         // sem lenient o Mockito acusaria "stub desnecessário" e falharia o teste.
 
         lenient().when(estoqueRepository.findForUpdate("cond-a", "prod-a")).thenReturn(Optional.of(estoque));
+
         lenient().when(movimentacaoRepository.existsByChaveIdempotencia(anyString()))
                 .thenAnswer(inv -> chavesGravadas.contains(inv.<String>getArgument(0)));
+
+        // thenAnswer: Simula o save: devolve o mesmo User que recebeu (sem isso o mock devolveria null).
         lenient().when(movimentacaoRepository.save(any(MovimentacaoEstoque.class))).thenAnswer(inv -> {
             MovimentacaoEstoque m = inv.getArgument(0);
             chavesGravadas.add(m.getChaveIdempotencia());
             return m;
         });
+
     }
 
     @Test
     @DisplayName("Venda: reserva baixa o estoque e a confirmação do pagamento mantém a baixa")
     void vendaBaixaEstoque() {
         estoqueService.reservar(pedido);
+
+        // assertThat(valor): função do AssertJ que inicia uma verificação (assertiva) sobre um valor.
+        // Ela recebe o resultado REAL obtido pelo código testado e devolve um objeto com métodos
+        // encadeáveis (isEqualTo, isTrue, isFalse, isSameAs, isNull...) que descrevem o que se ESPERA
+        // dele. Se a expectativa não for cumprida, o teste falha com uma mensagem clara mostrando
+        // o valor esperado e o valor encontrado.
+
+        // Leitura natural: assertThat(real).isEqualTo(esperado)  ->  "garanta que real é igual a esperado".
+
         assertThat(estoque.getQuantidade()).isEqualByComparingTo("8.000");
 
         estoqueService.confirmarVenda(pedido);
         assertThat(estoque.getQuantidade()).isEqualByComparingTo("8.000");
 
         ArgumentCaptor<MovimentacaoEstoque> captor = ArgumentCaptor.forClass(MovimentacaoEstoque.class);
+
         verify(movimentacaoRepository, times(2)).save(captor.capture());
+
         assertThat(captor.getAllValues()).extracting(MovimentacaoEstoque::getTipo)
                 .containsExactly(TipoMovimentacaoEstoque.RESERVA, TipoMovimentacaoEstoque.VENDA);
         MovimentacaoEstoque reserva = captor.getAllValues().get(0);
@@ -106,6 +125,7 @@ class VendaEstoqueUnitTest {
     @DisplayName("Cancelamento da compra devolve as unidades ao estoque")
     void cancelamentoDevolveEstoque() {
         estoqueService.reservar(pedido);
+
         estoqueService.liberar(pedido, true);
 
         assertThat(estoque.getQuantidade()).isEqualByComparingTo("10.000");
@@ -174,5 +194,6 @@ class VendaEstoqueUnitTest {
         return new Fixture(order, estoque);
     }
 
-    private record Fixture(Order order, EstoqueCondominio estoque) {}
+    private record Fixture(Order order, EstoqueCondominio estoque) {
+    }
 }
