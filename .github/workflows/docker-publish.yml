@@ -107,7 +107,9 @@ jobs:
             docker compose up -d --no-deps app
 
             # Valida a config do nginx antes de recriá-lo; se falhar, volta a anterior.
-            if ! docker compose run --rm --no-deps -T nginx nginx -t; then
+            # </dev/null: o script chega pelo stdin do ssh; sem isso o "run" consome o resto
+            # do heredoc e os comandos seguintes nunca executam (o passo sai 0 mesmo assim).
+            if ! docker compose run --rm --no-deps -T nginx nginx -t </dev/null; then
               echo "Configuração do nginx inválida; restaurando a anterior"
               rm -rf nginx && mv nginx.old nginx
               exit 1
