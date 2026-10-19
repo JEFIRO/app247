@@ -24,6 +24,13 @@ jobs:
       - name: Testes
         run: ./mvnw --batch-mode --no-transfer-progress test
 
+      - name: Upload relatórios de teste
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports
+
   deploy:
     needs: test
     runs-on: ubuntu-latest
@@ -50,7 +57,7 @@ jobs:
         with:
           context: .
           push: true
-          platforms: linux/arm64
+          platforms: linux/amd64,linux/arm64
           tags: |
             jefiroo/app247-backend:latest
             jefiroo/app247-backend:${{ github.sha }}
@@ -67,17 +74,27 @@ jobs:
           echo "Fingerprint da chave usada pelo GitHub:"
           ssh-keygen -y -f ~/.ssh/oracle_key | ssh-keygen -lf -
 
+      - name: Enviar docker-compose.yml
+        run: |
+          ssh -i ~/.ssh/oracle_key \
+            ${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }} \
+            'cd ~/projetos/back-app247 && cp docker-compose.yml docker-compose.yml.bak'
+          scp -i ~/.ssh/oracle_key docker-compose.yml \
+            ${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }}:~/projetos/back-app247/docker-compose.yml
+
       - name: Deploy na Oracle
         run: |
           ssh -i ~/.ssh/oracle_key \
           ${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }} << 'EOF'
+            set -e
+            cd ~/projetos/back-app247
 
-            cd ~/app247
+            # Aborta se faltar variável obrigatória no .env
+            docker compose config > /dev/null
 
             docker compose pull app
             docker compose up -d --no-deps app
 
             docker image prune -f
             docker compose ps
-
           EOF
