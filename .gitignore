@@ -42,3 +42,4 @@ data/
 ### Python ###
 __pycache__/
 *.pyc
+/24por7_contexto/
