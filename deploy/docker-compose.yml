@@ -156,8 +156,11 @@ services:
     restart: unless-stopped
     depends_on:
       - nginx
+    # Domínio estático da conta ngrok: sem ele a URL muda a cada reinício e quebram o webhook
+    # do MP, o MP_OAUTH_REDIRECT_URL e os apps.
     command:
       - "http"
+      - "--url=${NGROK_URL:-tayna-fitful-mariko.ngrok-free.dev}"
       - "nginx:80"
     environment:
       NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
