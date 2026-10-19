@@ -318,6 +318,10 @@ git diff --check              → apenas linha em branco extra no fim de .env.ex
   Token inválido/expirado responde 401 `TOKEN_INVALID`.
 - Limites (18/10/2026): login por CPF/origem, send-code e validate-code por e-mail/origem, onboarding por
   origem (`PublicAuthRateLimits`). Gestor não altera e-mail de terceiros e GERENTE não altera ADMIN.
+- Webhook MP (18/10/2026): estado sempre consultado em `GET /v1/orders/{id}` com a conta da Empresa da tentativa;
+  o corpo do webhook não é usado como fonte de estado.
+- `RestExceptionHandler`: mensagens de exceções lançadas por bibliotecas (JDK/Spring/Hibernate) viram texto
+  genérico; mensagens das regras do app continuam indo ao cliente.
 - Endpoints de teste MP (chamadas reais): opt-in por `TEST_ENDPOINTS_ENABLED=true`, nunca em `prod`, exigem
   ADMIN/GERENTE. A classe ainda é compilada no jar.
 - Migração legada de credencial (`/terminal/*/credential/migrate`, `TERMINAL_INTERNAL_TOKEN`) removida em

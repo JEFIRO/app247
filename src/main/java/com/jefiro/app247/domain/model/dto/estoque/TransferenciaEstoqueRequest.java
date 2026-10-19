@@ -1,5 +1,6 @@
 package com.jefiro.app247.domain.model.dto.estoque;
 
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -17,6 +18,6 @@ public record TransferenciaEstoqueRequest(
 ) {
     public record Item(
             @NotBlank String produtoId,
-            @NotNull @DecimalMin(value="0.000", inclusive=false) BigDecimal quantidade
+            @NotNull @DecimalMin(value="0.000", inclusive=false) @DecimalMax(value = "999999999999", message = "Quantidade fora do limite permitido") BigDecimal quantidade
     ) {}
 }

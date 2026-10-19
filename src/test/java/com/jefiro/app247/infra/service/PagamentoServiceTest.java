@@ -1,6 +1,7 @@
 package com.jefiro.app247.infra.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jefiro.app247.domain.model.Empresa;
 import com.jefiro.app247.domain.model.Order;
 import com.jefiro.app247.domain.model.PaymentAttempt;
 import com.jefiro.app247.domain.model.Carrinho;
@@ -27,6 +28,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import java.util.ArrayList;
@@ -113,7 +115,7 @@ class PagamentoServiceTest {
                 .replaceFirst("\\\"status_detail\\\":\\\"insufficient_amount\\\"",
                         "\\\"status_detail\\\":\\\"failed\\\"");
 
-        pagamentoService.atualizarPagamento(json);
+        deliver(json);
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.FAILED);
         assertThat(pagamento.getStatus()).isEqualTo(PagamentoStatus.FAILED);
@@ -141,7 +143,7 @@ class PagamentoServiceTest {
                 PaymentProvider.MERCADO_PAGO, "attempt-local-1"))
                 .thenReturn(Optional.empty());
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> pagamentoService.atualizarPagamento(
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> deliver(
                         webhook("canceled", "canceled", null, null, null, false)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("ATTEMPT_NOT_FOUND");
@@ -183,12 +185,14 @@ class PagamentoServiceTest {
 
     @Test
     void statusDesconhecidoNaoAlteraNemPersisteEntidades() throws Exception {
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> pagamentoService.atualizarPagamento(
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> deliver(
                         webhook("future_status", "future_detail", null, null, null, false)))
                 .isInstanceOf(UnknownExternalStatusException.class);
 
         assertThat(pagamento.getStatus()).isEqualTo(PagamentoStatus.PENDING);
-        verifyNoInteractions(orderService, pagamentoRepository);
+        verifyNoInteractions(orderService);
+        verify(pagamentoRepository, never()).save(any(PaymentAttempt.class));
+        verify(pagamentoRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -232,7 +236,7 @@ class PagamentoServiceTest {
         order.setStatus(OrderStatus.PROCESSED);
         order.setMpEventVersion(4);
         pagamento.setStatus(PagamentoStatus.PROCESSED);
-        pagamentoService.atualizarPagamento(
+        deliver(
                 webhook("failed", "processing_error", null, null, null, false)
                         .replace("\"version\":3", "\"version\":2")
         );
@@ -248,7 +252,7 @@ class PagamentoServiceTest {
         order.setStatus(OrderStatus.PROCESSED);
         order.setMpEventVersion(3);
         pagamento.setStatus(PagamentoStatus.PROCESSED);
-        pagamentoService.atualizarPagamento(
+        deliver(
                 webhook("failed", "processing_error", null, null, null, false)
                         .replace("\"version\":3", "\"version\":4")
         );
@@ -264,8 +268,8 @@ class PagamentoServiceTest {
         when(orderService.save(any())).thenAnswer(call -> call.getArgument(0));
         String approved = webhook("processed", "accredited", "credit_card", "visa", 1, true);
 
-        pagamentoService.atualizarPagamento(approved);
-        pagamentoService.atualizarPagamento(approved);
+        deliver(approved);
+        deliver(approved);
 
         verify(eventPublisher, times(1)).publishEvent(any(com.jefiro.app247.infra.event.OrderPaidEvent.class));
         verify(eventPublisher, times(1)).publishEvent(any(PaymentEvent.class));
@@ -295,7 +299,7 @@ class PagamentoServiceTest {
                 PaymentProvider.MERCADO_PAGO, "mp-order-1:created:null"))
                 .thenReturn(true);
 
-        pagamentoService.atualizarPagamento(created);
+        deliver(created);
 
         verify(paymentEventRepository, never()).save(any());
         verify(pagamentoRepository, never()).saveAndFlush(any());
@@ -404,6 +408,71 @@ class PagamentoServiceTest {
                 com.jefiro.app247.domain.model.enum_type.TerminalPaymentStatus.APPROVED);
     }
 
+    @Test
+    void corpoDoWebhookEhIgnoradoEEstadoVemDaApiDaContaDaEmpresa() throws Exception {
+        Empresa empresa = new Empresa();
+        empresa.setId("empresa-1");
+        pagamento.setEmpresa(empresa);
+        when(pagamentoRepository.findByProviderOrderId("mp-order-1")).thenReturn(Optional.of(pagamento));
+        when(mercadoPagoOrderQueryService.getOrderByEmpresa("empresa-1", "mp-order-1"))
+                .thenReturn(orderResponse("mp-order-1", "attempt-local-1", "at_terminal"));
+        when(pagamentoRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+        when(orderService.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        // Corpo forjado diz "processed"; a API diz que ainda está no terminal.
+        pagamentoService.atualizarPagamento(webhook("processed", "accredited", "credit_card", "visa", 1, true)
+                .replace("\"user_id\":\"mp-user-1\"", "\"user_id\":\"conta-do-atacante\""));
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.AT_TERMINAL);
+        assertThat(pagamento.getStatus()).isEqualTo(PagamentoStatus.PENDING);
+        verify(mercadoPagoOrderQueryService, never()).getOrder(any(), any());
+    }
+
+    @Test
+    void consultaQueRetornaOutraOrderEhRejeitada() throws Exception {
+        when(mercadoPagoOrderQueryService.getOrder("mp-user-1", "mp-order-1"))
+                .thenReturn(orderResponse("mp-order-OUTRA", "attempt-local-1", "processed"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> pagamentoService.atualizarPagamento(
+                        webhook("processed", "accredited", null, null, null, false)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("outra Order");
+        assertThat(pagamento.getStatus()).isEqualTo(PagamentoStatus.PENDING);
+    }
+
+    @Test
+    void consultaComExternalReferenceDivergenteDaTentativaEhRejeitada() throws Exception {
+        when(pagamentoRepository.findByProviderOrderId("mp-order-1")).thenReturn(Optional.of(pagamento));
+        when(mercadoPagoOrderQueryService.getOrder("mp-user-1", "mp-order-1"))
+                .thenReturn(orderResponse("mp-order-1", "outra-tentativa", "processed"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> pagamentoService.atualizarPagamento(
+                        webhook("processed", "accredited", null, null, null, false)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("external_reference divergente");
+        assertThat(pagamento.getStatus()).isEqualTo(PagamentoStatus.PENDING);
+    }
+
+    /**
+     * O service sempre consulta a order na API; nos testes a "API" devolve o mesmo
+     * snapshot que veio em {@code data} do webhook.
+     */
+    private void deliver(String json) throws Exception {
+        ObjectMapper objectMapper = new ObjectMapper();
+        var data = objectMapper.readTree(json).get("data");
+        OrderResponse remote = objectMapper.treeToValue(data, OrderResponse.class);
+        String id = data.get("id").asText();
+        lenient().when(mercadoPagoOrderQueryService.getOrder(any(), eq(id))).thenReturn(remote);
+        lenient().when(mercadoPagoOrderQueryService.getOrderByEmpresa(any(), eq(id))).thenReturn(remote);
+        pagamentoService.atualizarPagamento(json);
+    }
+
+    private static OrderResponse orderResponse(String id, String externalReference, String status) throws Exception {
+        return new ObjectMapper().readValue("""
+                {"id":"%s","type":"point","external_reference":"%s","status":"%s","status_detail":"%s"}
+                """.formatted(id, externalReference, status, status), OrderResponse.class);
+    }
+
     private void process(
             String status,
             String statusDetail,
@@ -414,7 +483,7 @@ class PagamentoServiceTest {
     ) throws Exception {
         when(pagamentoRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         when(orderService.save(any())).thenAnswer(call -> call.getArgument(0));
-        pagamentoService.atualizarPagamento(
+        deliver(
                 webhook(status, statusDetail, methodType, methodId, installments, includePayment)
         );
     }

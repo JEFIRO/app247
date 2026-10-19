@@ -8,13 +8,16 @@ import java.util.List;
 
 public record CreateProductDTO(
 
+        @Size(max = 80, message = "O código deve ter no máximo 80 caracteres.")
         String codigo,
 
         @NotBlank(message = "O nome do produto não pode ficar vazio.")
+        @Size(max = 180, message = "O nome do produto deve ter no máximo 180 caracteres.")
         String nome,
 
         @NotNull(message = "O preço deve ser informado.")
         @Positive(message = "O preço deve ser maior que zero.")
+        @Digits(integer = 9, fraction = 6, message = "Preço fora do limite permitido.")
         BigDecimal preco,
 
         @Deprecated
@@ -26,16 +29,23 @@ public record CreateProductDTO(
         @NotBlank(message = "A categoria do produto deve ser informada.")
         String categoria,
 
+        @Size(max = 1000, message = "A descrição deve ter no máximo 1000 caracteres.")
         String descricao,
 
+        // Exibida nos apps: bloqueia esquemas executáveis (javascript:, data:, vbscript:).
+        @Size(max = 500, message = "A URL da foto deve ter no máximo 500 caracteres.")
+        @Pattern(regexp = "(?i)^(?!\\s*(javascript|data|vbscript):).*$", message = "URL da foto inválida.")
         String foto,
 
         @Positive(message = "O peso deve ser maior que zero.")
+        @Digits(integer = 12, fraction = 3, message = "Peso fora do limite permitido.")
         BigDecimal peso,
 
         @PositiveOrZero(message = "A tolerância de peso não pode ser negativa.")
+        @Digits(integer = 12, fraction = 3, message = "Tolerância de peso fora do limite permitido.")
         BigDecimal pesoTolerancia,
 
+        @Size(max = 80, message = "O código interno deve ter no máximo 80 caracteres.")
         String codigoInterno,
 
         List<@Valid CodigoBarrasRequest> codigosBarras,

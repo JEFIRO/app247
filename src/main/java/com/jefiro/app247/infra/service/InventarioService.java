@@ -278,6 +278,7 @@ public class InventarioService {
 
     private BigDecimal quantidade(BigDecimal valor) {
         if (valor == null) throw new IllegalArgumentException("Quantidade contada obrigatória");
+        if (valor.signum() < 0) throw new IllegalArgumentException("Quantidade contada não pode ser negativa");
         try { return valor.setScale(3, RoundingMode.UNNECESSARY); }
         catch (ArithmeticException ex) { throw new IllegalArgumentException("Quantidade aceita no máximo 3 casas decimais"); }
     }

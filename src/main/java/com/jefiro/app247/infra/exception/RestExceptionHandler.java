@@ -1,5 +1,6 @@
 package com.jefiro.app247.infra.exception;
 
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
@@ -129,7 +130,8 @@ public class RestExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<RestErrorMessage> invalidArgument(IllegalArgumentException ex) {
-        return ResponseEntity.badRequest().body(new RestErrorMessage(HttpStatus.BAD_REQUEST, ex.getMessage()));
+        return ResponseEntity.badRequest().body(new RestErrorMessage(HttpStatus.BAD_REQUEST,
+                safeMessage(ex, "Dados inválidos.")));
     }
 
     @ExceptionHandler(FileStorageException.class)
@@ -141,13 +143,29 @@ public class RestExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(NoSuchElementException.class)
     public ResponseEntity<RestErrorMessage> notFound(NoSuchElementException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new RestErrorMessage(HttpStatus.NOT_FOUND, ex.getMessage()));
+                .body(new RestErrorMessage(HttpStatus.NOT_FOUND, safeMessage(ex, "Recurso não encontrado.")));
     }
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<RestErrorMessage> conflict(IllegalStateException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new RestErrorMessage(HttpStatus.CONFLICT, ex.getMessage()));
+                .body(new RestErrorMessage(HttpStatus.CONFLICT, safeMessage(ex, "Operação não permitida no estado atual.")));
+    }
+
+    /**
+     * Mensagens das regras do App 24/7 são escritas para o usuário e seguem na resposta.
+     * Exceções lançadas por bibliotecas (JDK, Spring, Hibernate) podem expor detalhes
+     * internos, então viram uma mensagem genérica e o texto original vai só para o log.
+     */
+    static String safeMessage(RuntimeException ex, String fallback) {
+        StackTraceElement[] trace = ex.getStackTrace();
+        boolean fromApp = trace.length > 0 && trace[0].getClassName().startsWith("com.jefiro.app247.");
+        if (fromApp && ex.getMessage() != null && !ex.getMessage().isBlank()) return ex.getMessage();
+        if (!fromApp) {
+            LoggerFactory.getLogger(RestExceptionHandler.class).warn("[HTTP-ERROR] {} ocultada: {}",
+                    ex.getClass().getSimpleName(), ex.getMessage());
+        }
+        return fallback;
     }
 
     private ResponseEntity<RestErrorMessage> conflict(String code, String message) {

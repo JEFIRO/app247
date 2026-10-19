@@ -5,13 +5,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jefiro.app247.domain.model.dto.OrderResponse;
 import com.jefiro.app247.domain.model.dto.mercadopago.OrderWebhookNotification;
 import com.jefiro.app247.domain.model.dto.PointPaymentResponse;
+import com.jefiro.app247.domain.model.PaymentAttempt;
+import com.jefiro.app247.domain.model.enum_type.PaymentProvider;
+import com.jefiro.app247.infra.repository.PagamentoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import java.util.Optional;
 
 @Service
 public class PagamentoService {
@@ -32,6 +35,8 @@ public class PagamentoService {
     PointPaymentPersistenceService pointPaymentPersistenceService;
     @Autowired
     PointPaymentSubmissionService submissionService;
+    @Autowired
+    PagamentoRepository pagamentoRepository;
 
     public PointPaymentResponse gerarCobranca(String carrinho_id) {
         return gerarCobranca(carrinho_id, null);
@@ -68,62 +73,42 @@ public class PagamentoService {
         transitionService.apply(normalize(notification));
     }
 
+    /**
+     * A assinatura do Mercado Pago cobre só {@code data.id}, request-id e ts; o corpo não é
+     * assinado e uma assinatura válida pode ser reenviada. Por isso o estado nunca vem do
+     * corpo: a order é sempre consultada na API, preferindo a conta da Empresa dona da
+     * tentativa local em vez do {@code user_id} informado no webhook.
+     */
     private MercadoPagoOrderState normalize(OrderWebhookNotification notification) {
-        if (notification == null || notification.data() == null) {
-            throw new IllegalArgumentException("Webhook de order sem data");
+        if (notification == null || notification.data() == null
+                || notification.data().id() == null || notification.data().id().isBlank()) {
+            throw new IllegalArgumentException("Webhook de order sem data.id");
         }
 
         OrderWebhookNotification.Data webhookData = notification.data();
-        if (webhookData.externalReference() == null || webhookData.externalReference().isBlank()) {
-            OrderResponse response = mercadoPagoOrderQueryService.getOrder(
-                    notification.userId(),
-                    webhookData.id()
-            );
-            if (response == null || response.externalReference() == null
-                    || response.externalReference().isBlank()) {
-                throw new IllegalStateException("Consulta da order não retornou external_reference");
-            }
-            OrderResponse.Payment payment = first(response.transactions() != null
-                    ? response.transactions().payments() : null);
-            return new MercadoPagoOrderState(
-                    response.externalReference(),
-                    response.status(),
-                    response.statusDetail(),
-                    payment != null && payment.statusDetail() != null
-                            ? payment.statusDetail() : response.statusDetail(),
-                    payment != null ? payment.id() : null,
-                    payment != null && payment.paymentMethod() != null ? payment.paymentMethod().id() : null,
-                    payment != null && payment.paymentMethod() != null ? payment.paymentMethod().type() : null,
-                    payment != null && payment.paymentMethod() != null ? payment.paymentMethod().installments() : null,
-                    response.id(),
-                    response.version(),
-                    response.lastUpdatedDate(),
-                    null
-            );
+        String mercadoPagoOrderId = webhookData.id();
+        PaymentAttempt attempt = pagamentoRepository.findByProviderOrderId(mercadoPagoOrderId)
+                .or(() -> webhookData.externalReference() == null || webhookData.externalReference().isBlank()
+                        ? Optional.empty()
+                        : pagamentoRepository.findByProviderAndExternalReference(
+                                PaymentProvider.MERCADO_PAGO, webhookData.externalReference()))
+                .orElse(null);
+
+        OrderResponse response = attempt != null && attempt.getEmpresa() != null
+                ? mercadoPagoOrderQueryService.getOrderByEmpresa(attempt.getEmpresa().getId(), mercadoPagoOrderId)
+                : mercadoPagoOrderQueryService.getOrder(notification.userId(), mercadoPagoOrderId);
+        if (response == null || response.id() == null || !mercadoPagoOrderId.equals(response.id())) {
+            throw new IllegalStateException("Consulta retornou outra Order Mercado Pago");
         }
-
-        OrderWebhookNotification.Payment payment = first(
-                webhookData.transactions() != null ? webhookData.transactions().payments() : null
-        );
-        return new MercadoPagoOrderState(
-                webhookData.externalReference(),
-                webhookData.status(),
-                webhookData.statusDetail(),
-                payment != null && payment.statusDetail() != null
-                        ? payment.statusDetail() : webhookData.statusDetail(),
-                payment != null ? payment.id() : null,
-                payment != null && payment.paymentMethod() != null ? payment.paymentMethod().id() : null,
-                payment != null && payment.paymentMethod() != null ? payment.paymentMethod().type() : null,
-                payment != null && payment.paymentMethod() != null ? payment.paymentMethod().installments() : null,
-                webhookData.id(),
-                webhookData.version(),
-                notification.dateCreated(),
-                null
-        );
+        if (response.externalReference() == null || response.externalReference().isBlank()) {
+            throw new IllegalStateException("Consulta da order não retornou external_reference");
+        }
+        if (attempt != null && attempt.getExternalReference() != null
+                && !attempt.getExternalReference().equals(response.externalReference())) {
+            throw new IllegalStateException("Consulta retornou external_reference divergente");
+        }
+        return MercadoPagoOrderState.from(response);
     }
 
-    private <T> T first(List<T> values) {
-        return values == null || values.isEmpty() ? null : values.get(0);
-    }
 
 }

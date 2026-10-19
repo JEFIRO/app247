@@ -288,8 +288,10 @@ negócio incluem `INVALID_LOYALTY_MODE`, `INVALID_LOYALTY_CONFIG`, `INVALID_REWA
 ## POST /condominios
 
 - Controller/service: `CondominioController.criar` → `CondominioService.criar`.
-- Segurança HTTP: pública temporariamente; requer contexto de empresa para concluir a operação.
-- Body `CondominioRequest`: nome, CNPJ e `EnderecoDTO` opcional.
+- Segurança HTTP: JWT `ADMIN`/`GERENTE` (`SecurityConfig`); operação restrita à Empresa do token.
+- Body `CondominioRequest`: `nome` obrigatório (até 150); `cnpj` vazio, 14 dígitos ou `00.000.000/0000-00`;
+  `endereco` opcional, mas se vier exige rua, número, bairro, cidade, UF (2 letras) e CEP (`00000-000` ou 8 dígitos).
+  Inválido → `400 VALIDATION_ERROR` (antes caía no banco e voltava `409 DATA_CONFLICT`).
 - Resposta: `201 CondominioResponse`.
 - Efeito: cria condomínio/endereço na empresa autenticada.
 
@@ -297,19 +299,19 @@ negócio incluem `INVALID_LOYALTY_MODE`, `INVALID_LOYALTY_CONFIG`, `INVALID_REWA
 
 - Finalidade: listar condomínios da empresa autenticada.
 - Controller/service: `CondominioController.listar` → `CondominioService.listar`.
-- Segurança HTTP: pública temporariamente; requer contexto de empresa para concluir a operação.
+- Segurança HTTP: JWT `ADMIN`/`GERENTE` (`SecurityConfig`); operação restrita à Empresa do token.
 - Resposta: `200 List<CondominioResponse>`.
 
 ## GET /condominios/{condominioId}
 
 - Finalidade: buscar condomínio dentro do tenant.
-- Segurança HTTP: pública temporariamente; requer contexto de empresa para concluir a operação.
+- Segurança HTTP: JWT `ADMIN`/`GERENTE` (`SecurityConfig`); operação restrita à Empresa do token.
 - Resposta: `200 CondominioResponse`; `404` se ausente ou de outra empresa.
 
 ## PUT /condominios/{condominioId}
 
 - Finalidade: atualizar condomínio/endereço no tenant.
-- Segurança HTTP: pública temporariamente; requer contexto de empresa para concluir a operação.
+- Segurança HTTP: JWT `ADMIN`/`GERENTE` (`SecurityConfig`); operação restrita à Empresa do token.
 - Body/saída: `CondominioRequest` → `CondominioResponse`.
 - Efeitos: substitui o endereço por nova entidade quando enviado.
 
@@ -327,31 +329,32 @@ negócio incluem `INVALID_LOYALTY_MODE`, `INVALID_LOYALTY_CONFIG`, `INVALID_REWA
 
 ## POST /condominios/{condominioId}/terminais
 
-- Segurança HTTP: pública temporariamente; requer contexto de empresa para concluir a operação.
-- Body `TerminalRequest`: nome, serialNumber, macAddress, ipAddress.
+- Segurança HTTP: JWT `ADMIN`/`GERENTE` (`SecurityConfig`); operação restrita à Empresa do token.
+- Body `TerminalRequest`: `nome` obrigatório até 80 (vira `codigo`), `serialNumber` até 120, `macAddress` até 30,
+  `ipAddress` até 45. Mesmas regras no `PUT` e no onboarding.
 - Resposta: `201 TerminalResponseDTO`.
 - Efeito: cria terminal no condomínio validado contra `EmpresaContext`.
 
 ## GET /condominios/{condominioId}/terminais
 
-- Segurança HTTP: pública temporariamente; requer contexto de empresa para concluir a operação.
+- Segurança HTTP: JWT `ADMIN`/`GERENTE` (`SecurityConfig`); operação restrita à Empresa do token.
 - Resposta: lista de `TerminalResponseDTO` limitada ao condomínio/empresa.
 
 ## GET /terminais/{terminalId}
 
-- Segurança HTTP: pública temporariamente; requer contexto de empresa para concluir a operação.
+- Segurança HTTP: JWT `ADMIN`/`GERENTE` (`SecurityConfig`); operação restrita à Empresa do token.
 - Resposta: `TerminalResponseDTO`; `404` também oculta terminal de outro tenant.
 
 ## PUT /terminais/{terminalId}
 
-- Segurança HTTP: pública temporariamente; requer contexto de empresa para concluir a operação.
+- Segurança HTTP: JWT `ADMIN`/`GERENTE` (`SecurityConfig`); operação restrita à Empresa do token.
 - Body/saída: `TerminalRequest` → `TerminalResponseDTO`.
 - Efeito: atualiza dados físicos sem alterar condomínio.
 
 ## PUT /terminais/{terminalId}/mercado-pago
 
 - Controller/service: `TerminalController.vincularMercadoPago` → `MercadoPagoTerminalService.vincular`.
-- Segurança HTTP: pública temporariamente; requer contexto de empresa para concluir a operação.
+- Segurança HTTP: JWT `ADMIN`/`GERENTE` (`SecurityConfig`); operação restrita à Empresa do token.
 - Body: `{ "mercadoPagoTerminalId": "..." }`.
 - Resposta: `200 TerminalResponseDTO`.
 - Efeitos: consulta a conta Mercado Pago da empresa, valida a maquininha e grava vínculo único.
@@ -359,7 +362,7 @@ negócio incluem `INVALID_LOYALTY_MODE`, `INVALID_LOYALTY_CONFIG`, `INVALID_REWA
 
 ## DELETE /terminais/{terminalId}/mercado-pago
 
-- Segurança HTTP: pública temporariamente; requer contexto de empresa para concluir a operação.
+- Segurança HTTP: JWT `ADMIN`/`GERENTE` (`SecurityConfig`); operação restrita à Empresa do token.
 - Resposta: `204`.
 - Efeito: remove vínculo após validar conta OAuth e tenant.
 
@@ -374,6 +377,8 @@ Os endpoints administrativos de `/produtos/**` estão públicos temporariamente 
 - Resposta: `200 ProdutoResponse`.
 - Efeitos: cria produto no catálogo e possivelmente arquivo local.
 - Observação: `quantidade` legado é ignorado; estoque é criado separadamente.
+- Validação: `nome` até 180, `descricao` até 1000, `codigo`/`codigoInterno` até 80, preço até 9 inteiros e 6
+  decimais, peso/tolerância até 12 inteiros e 3 decimais, `foto` até 500 e sem esquemas `javascript:`/`data:`/`vbscript:`.
 - Conflito: código já usado por outro produto da empresa retorna `409` antes de armazenar imagem.
 
 ## POST /produtos/save-list
@@ -766,7 +771,9 @@ O contrato entre Spring e Python e a operação Docker estão detalhados em [[co
 - Headers: `x-signature`, `x-request-id`; query opcional `data.id`; body JSON do Mercado Pago.
 - Respostas: `200 ENFILEIRADO`, `200 DUPLICADO`, `400` payload inconsistente, `401` assinatura inválida, `503` segredo ausente.
 - Efeitos: registra/deduplica `webhook_event` no MySQL, mantém chave Redis curta, faz push em `mp_queue` e atualiza o inbox para `QUEUED/PROCESSED/DLQ`.
-- Processamento posterior: `PaymentWorker` → `PagamentoService.atualizarPagamento` → `PaymentStateTransitionService` → PaymentAttempt/PaymentEvent/Order/estoque.
+- Processamento posterior: `PaymentWorker` → `PagamentoService.atualizarPagamento` → consulta `GET /v1/orders/{data.id}`
+  com a conta da Empresa da tentativa (o corpo do webhook não é confiável) → `PaymentStateTransitionService` →
+  PaymentAttempt/PaymentEvent/Order/estoque. Ver [[mercado-pago]].
 
 ## POST /admin/orders/{orderId}/refund
 

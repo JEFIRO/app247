@@ -170,9 +170,21 @@ Reentregas idênticas respondem `200 DUPLICADO` sem novo item na fila. Se o enqu
 
 ## Webhook completo e resumido
 
-Payloads completos carregam `external_reference`, status e possivelmente `transactions.payments`. `refunded` e `action_required` podem omitir `transactions`; todos os campos aninhados são tratados como opcionais.
+Desde 18/10/2026 o estado **nunca** vem do corpo do webhook. A assinatura do Mercado Pago cobre só
+`data.id`, `x-request-id` e `ts`; o corpo não é assinado e o `ts` não é conferido, então uma assinatura
+válida poderia ser reenviada com corpo forjado (ex.: `status=processed`). `PagamentoService.normalize`:
 
-Uma notificação resumida, como a produzida pela tela de simulação, pode conter apenas `data.id`. Nesse caso `MercadoPagoOrderQueryService` usa `user_id` para localizar a conta OAuth e consulta `GET /v1/orders/{id}`. A resposta consultada fornece `external_reference` e o estado usado na atualização. Se conta, ID ou referência continuarem ausentes, a mensagem falha e o worker a recoloca na fila.
+1. localiza a tentativa local por `providerOrderId = data.id` (ou, na falta, pelo `external_reference` do corpo,
+   usado só como chave de busca);
+2. consulta `GET /v1/orders/{data.id}` com a conta OAuth da **Empresa da tentativa**
+   (`getOrderByEmpresa`); sem tentativa local, usa a conta do `user_id` do webhook;
+3. exige que a resposta tenha o mesmo `id` e um `external_reference` igual ao da tentativa;
+4. aplica `MercadoPagoOrderState.from(resposta)`, o mesmo mapeamento da reconciliação.
+
+Consequência: todo webhook custa uma chamada à API do MP; falha nessa chamada (`ExternalServiceException`)
+faz o worker tentar de novo (3 vezes) e depois mandar para `mp_queue:dlq`. Reenvio de assinatura antiga só
+provoca uma nova consulta do estado real, sem efeito indevido; por isso o `ts` continua sem janela.
+O stub E2E (`scripts/e2e/point_stub.py`) já responde `GET /v1/orders/{id}`.
 
 O worker consome a cada dois segundos, move atomicamente o payload para `mp_queue:processing`, tenta no máximo três vezes e envia falhas permanentes para `mp_queue:dlq`. Recuperação automática de itens órfãos em `processing` após queda permanece pendente.
 
