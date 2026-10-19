@@ -33,11 +33,26 @@ import static org.mockito.Mockito.*;
  * cancelamento devolve as unidades. As movimentações gravadas são "lembradas" em
  * memória para simular a idempotência do repositório.
  */
+// @ExtendWith(MockitoExtension.class): liga o Mockito ao JUnit 5. É ele que cria os objetos
+// marcados com @Mock e @InjectMocks antes de cada teste e confere, ao final, se algum
+// when(...) configurado ficou sem uso (stub desnecessário faz o teste falhar).
 @ExtendWith(MockitoExtension.class)
 class VendaEstoqueUnitTest {
 
+    // @Mock: cria um objeto FALSO (dublê) da classe. Ele não executa o código real nem toca
+    // banco/rede; por padrão todo método devolve null, false, 0 ou vazio. O teste diz o que
+    // ele deve responder com when(...).thenReturn(...) e depois confere com verify(...) se foi
+    // chamado (e quantas vezes). Serve para testar UMA classe isolada das outras.
+    //
+    // @InjectMocks: cria um objeto REAL da classe testada e injeta nele os @Mock acima
+    // (pelo construtor ou pelos campos). Assim o código do serviço roda de verdade, mas
+    // tudo o que ele chama por fora é falso e controlado pelo teste.
+
+    // Simula o estoque do condomínio; findForUpdate é a busca com lock pessimista usada na baixa.
     @Mock EstoqueCondominioRepository estoqueRepository;
+    // Simula o histórico de movimentações e a checagem de chave de idempotência.
     @Mock MovimentacaoEstoqueRepository movimentacaoRepository;
+    // Classe testada de verdade: recebe os mocks acima no lugar das dependências reais.
     @InjectMocks EstoqueService estoqueService;
 
     private final Set<String> chavesGravadas = new HashSet<>();
@@ -50,6 +65,15 @@ class VendaEstoqueUnitTest {
         Fixture f = fixture("10.000", "2.000");
         estoque = f.estoque();
         pedido = f.order();
+
+        // lenient(): esses when(...) valem para todos os testes, mas nem todo teste usa todos;
+
+        //Normalmente, o Mockito pode reclamar quando você configura um comportamento com when(...).thenReturn(...),
+        // mas esse comportamento não é utilizado durante o teste.
+
+        //Com lenient(), essa configuração específica deixa de gerar essa reclamação.
+        // sem lenient o Mockito acusaria "stub desnecessário" e falharia o teste.
+
         lenient().when(estoqueRepository.findForUpdate("cond-a", "prod-a")).thenReturn(Optional.of(estoque));
         lenient().when(movimentacaoRepository.existsByChaveIdempotencia(anyString()))
                 .thenAnswer(inv -> chavesGravadas.contains(inv.<String>getArgument(0)));

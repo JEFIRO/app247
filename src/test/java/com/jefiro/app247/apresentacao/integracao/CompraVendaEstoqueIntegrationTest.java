@@ -29,7 +29,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class CompraVendaEstoqueIntegrationTest extends IntegracaoBase {
 
+    // @Autowired: o Spring injeta os repositórios reais (ligados ao H2 do teste).
+    // Cria o produto movimentado no cenário.
     @Autowired ProdutoRepository produtos;
+    // Lê o saldo do estoque central da empresa direto do banco, para conferir as operações.
     @Autowired EstoqueEmpresaRepository estoques;
 
     private User admin;

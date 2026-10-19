@@ -33,6 +33,12 @@ import static org.mockito.Mockito.when;
  * JWT. Cada teste roda em uma transação desfeita ao final ({@code @Transactional}), então
  * nenhum dado persiste e nenhum banco real é tocado.
  */
+// @SpringBootTest: sobe o contexto Spring completo (controllers, services, repositórios,
+// segurança), igual à aplicação rodando, só que dentro do teste. As properties desligam
+// tarefas agendadas e a reconciliação de pagamentos, que não interessam aqui.
+// @AutoConfigureMockMvc: cria o MockMvc, que simula requisições HTTP sem abrir porta.
+// @ActiveProfiles("test"): carrega application-test.properties (H2 em memória).
+// @Transactional: cada teste roda numa transação desfeita no final; o banco volta limpo.
 @SpringBootTest(properties = {"spring.task.scheduling.enabled=false",
         "payment.reconciliation.startup.enabled=false"})
 @AutoConfigureMockMvc
@@ -43,17 +49,27 @@ abstract class IntegracaoBase {
     protected static final String SENHA = "senha123";
     protected final ObjectMapper json = new ObjectMapper();
 
+    // @Autowired: pede ao Spring o bean REAL já criado no contexto (nada é falso aqui).
+    // Dispara requisições HTTP simuladas contra os controllers reais (com filtros de segurança).
     @Autowired protected MockMvc mvc;
+    // Repositório JPA de usuários: cria os usuários do cenário e confere o que foi gravado.
     @Autowired protected UserRepository users;
+    // Repositório JPA de empresas: cria a empresa (tenant) de cada cenário.
     @Autowired protected EmpresaRepository empresas;
+    // Codificador BCrypt real: grava senhas criptografadas como no cadastro de verdade.
     @Autowired protected PasswordEncoder passwordEncoder;
+    // Gera o JWT usado no header Authorization das rotas protegidas.
     @Autowired protected TokenService tokenService;
 
-    // Dependências externas substituídas por mocks: limite de tentativas (Redis) e
-    // listener de boas-vindas (envio de e-mail).
+    // @MockitoBean: troca, DENTRO do contexto Spring, o bean real por um mock do Mockito.
+    // Todo lugar da aplicação que usa essa classe passa a receber o objeto falso. Usado para
+    // o que depende de coisa externa e não deve rodar no teste: limite de tentativas de
+    // cadastro (Redis) e listener de boas-vindas (envio de e-mail). Diferença para @Mock:
+    // @Mock só existe no teste unitário; @MockitoBean substitui o bean na aplicação inteira.
     @MockitoBean protected RegistrationRateLimiter registrationRateLimiter;
     @MockitoBean protected UserListener userListener;
 
+    // Por padrão o mock devolveria false (bloquearia todo cadastro); aqui ele sempre libera.
     @BeforeEach
     void liberarRateLimit() {
         when(registrationRateLimiter.allow(any(), any(), any())).thenReturn(true);

@@ -29,12 +29,28 @@ import static org.mockito.Mockito.when;
  * O sistema não apaga usuários fisicamente: "remover" é desativar ({@code ativo=false}),
  * o que preserva o histórico de compras e impede o login.
  */
+// @ExtendWith(MockitoExtension.class): liga o Mockito ao JUnit 5. É ele que cria os objetos
+// marcados com @Mock e @InjectMocks antes de cada teste e confere, ao final, se algum
+// when(...) configurado ficou sem uso (stub desnecessário faz o teste falhar).
 @ExtendWith(MockitoExtension.class)
 class UsuarioUnitTest {
 
+    // @Mock: cria um objeto FALSO (dublê) da classe. Ele não executa o código real nem toca
+    // banco/rede; por padrão todo método devolve null, false, 0 ou vazio. O teste diz o que
+    // ele deve responder com when(...).thenReturn(...) e depois confere com verify(...) se foi
+    // chamado (e quantas vezes). Serve para testar UMA classe isolada das outras.
+    //
+    // @InjectMocks: cria um objeto REAL da classe testada e injeta nele os @Mock acima
+    // (pelo construtor ou pelos campos). Assim o código do serviço roda de verdade, mas
+    // tudo o que ele chama por fora é falso e controlado pelo teste.
+
+    // Simula o banco de usuários: checagem de CPF duplicado e o save.
     @Mock UserRepository repository;
+    // Simula a criptografia da senha (devolve um hash fixo para conferir).
     @Mock PasswordEncoder passwordEncoder;
+    // Simula o publicador do evento de usuário criado (que dispara o e-mail de boas-vindas).
     @Mock ApplicationEventPublisher publisher;
+    // Classe testada de verdade: recebe os mocks acima no lugar das dependências reais.
     @InjectMocks UserService userService;
 
     @Test

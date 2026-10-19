@@ -40,6 +40,7 @@ public class RegistrationService {
         NameParts name = names(request.nome(), request.sobrenome());
         String phone = normalizePhone(request.telefone());
         legal.validateAcceptance(request);
+
         if (users.existsByCpf(cpf)) {
             throw new ApiBusinessException(HttpStatus.CONFLICT, "CPF_ALREADY_REGISTERED",
                     "Já existe uma conta cadastrada com este CPF.");
@@ -52,6 +53,7 @@ public class RegistrationService {
                 .nome(name.first()).sobrenome(name.last()).cpf(cpf).email(email).telefone(phone)
                 .senha(passwords.encode(request.senha())).role(RoleUser.USER).ativo(true)
                 .emailVerificado(false).cpfVerifiedAt(null).build();
+
         if (legal.configured()) {
             Instant now = Instant.now();
             user.setTermsVersion(legal.termsVersion());
@@ -60,6 +62,7 @@ public class RegistrationService {
             user.setPrivacyAcceptedAt(now);
         }
         User saved = users.saveAndFlush(user);
+
         publisher.publishEvent(new UserCreatedEvent(saved));
         return new ClientRegistrationResponse(
                 new ClientRegistrationResponse.UserSummary(saved.getIdUser(), fullName(saved), saved.getEmail()),

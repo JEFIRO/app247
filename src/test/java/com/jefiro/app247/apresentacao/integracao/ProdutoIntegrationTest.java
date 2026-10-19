@@ -28,6 +28,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class ProdutoIntegrationTest extends IntegracaoBase {
 
+    // @Autowired: o Spring injeta o repositório real (ligado ao H2 do teste).
+    // Confere no banco o produto cadastrado/desativado pelos endpoints.
     @Autowired ProdutoRepository produtos;
     private User admin;
 

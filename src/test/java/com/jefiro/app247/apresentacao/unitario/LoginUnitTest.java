@@ -32,14 +32,30 @@ import static org.mockito.Mockito.when;
  * (sem banco, sem Spring). Cobre credenciais corretas, incorretas e o login restrito
  * ao administrador.
  */
+// @ExtendWith(MockitoExtension.class): liga o Mockito ao JUnit 5. É ele que cria os objetos
+// marcados com @Mock e @InjectMocks antes de cada teste e confere, ao final, se algum
+// when(...) configurado ficou sem uso (stub desnecessário faz o teste falhar).
 @ExtendWith(MockitoExtension.class)
 class LoginUnitTest {
 
     private static final String CPF = "52998224725";
 
+    // @Mock: cria um objeto FALSO (dublê) da classe. Ele não executa o código real nem toca
+    // banco/rede; por padrão todo método devolve null, false, 0 ou vazio. O teste diz o que
+    // ele deve responder com when(...).thenReturn(...) e depois confere com verify(...) se foi
+    // chamado (e quantas vezes). Serve para testar UMA classe isolada das outras.
+    //
+    // @InjectMocks: cria um objeto REAL da classe testada e injeta nele os @Mock acima
+    // (pelo construtor ou pelos campos). Assim o código do serviço roda de verdade, mas
+    // tudo o que ele chama por fora é falso e controlado pelo teste.
+
+    // Simula o Spring Security conferindo CPF e senha (aceita ou lança BadCredentialsException).
     @Mock AuthenticationManager authenticationManager;
+    // Simula a geração do JWT; permite verificar que nenhum token sai em login recusado.
     @Mock TokenService tokenService;
+    // Simula a validação/normalização do CPF informado no login.
     @Mock CpfService cpfService;
+    // Classe testada de verdade: recebe os mocks acima no lugar das dependências reais.
     @InjectMocks UserService userService;
 
     @BeforeEach
