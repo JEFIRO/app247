@@ -9,6 +9,13 @@ import com.jefiro.app247.infra.service.TerminalLifecycleService;
 import com.jefiro.app247.infra.service.TerminalRequestAuthorizationService;
 import com.jefiro.app247.domain.model.dto.TerminalBootstrapResponse;
 import com.jefiro.app247.domain.model.dto.TerminalCredentialResponse;
+import com.jefiro.app247.domain.model.dto.TerminalPairingApproveRequest;
+import com.jefiro.app247.domain.model.dto.TerminalPairingClaimRequest;
+import com.jefiro.app247.domain.model.dto.TerminalPairingClaimResponse;
+import com.jefiro.app247.domain.model.dto.TerminalPairingStartRequest;
+import com.jefiro.app247.domain.model.dto.TerminalPairingStartResponse;
+import com.jefiro.app247.infra.service.TerminalPairingService;
+import jakarta.servlet.http.HttpServletRequest;
 import com.jefiro.app247.infra.dto.mercadopago.VincularTerminalMercadoPagoRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -24,6 +31,8 @@ public class TerminalController {
     private final TerminalLifecycleService lifecycleService;
     @org.springframework.beans.factory.annotation.Autowired
     private TerminalRequestAuthorizationService terminalAuthorization;
+    @org.springframework.beans.factory.annotation.Autowired
+    private TerminalPairingService pairingService;
 
     public TerminalController(TerminalService service, MercadoPagoTerminalService mercadoPagoTerminalService,
                               TerminalLifecycleService lifecycleService) {
@@ -35,6 +44,25 @@ public class TerminalController {
     @GetMapping("/terminal/serial/{serial}")
     public ResponseEntity<TerminalActivationResponse> bySerial(@PathVariable String serial) {
         return ResponseEntity.ok(service.getBySerial(serial));
+    }
+
+    @PostMapping("/terminal/pairing")
+    public ResponseEntity<TerminalPairingStartResponse> iniciarPareamento(
+            @RequestBody @Valid TerminalPairingStartRequest request, HttpServletRequest httpRequest) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(pairingService.start(request, httpRequest.getRemoteAddr()));
+    }
+
+    @PostMapping("/terminal/pairing/claim")
+    public ResponseEntity<TerminalPairingClaimResponse> concluirPareamento(
+            @RequestBody @Valid TerminalPairingClaimRequest request) {
+        return ResponseEntity.ok(pairingService.claim(request.pairingToken()));
+    }
+
+    @PostMapping("/terminais/{terminalId}/pairing")
+    public ResponseEntity<TerminalResponseDTO> parear(@PathVariable String terminalId,
+                                                      @RequestBody @Valid TerminalPairingApproveRequest request) {
+        return ResponseEntity.ok(pairingService.approve(terminalId, request.code()));
     }
 
     @PostMapping("/condominios/{condominioId}/terminais")

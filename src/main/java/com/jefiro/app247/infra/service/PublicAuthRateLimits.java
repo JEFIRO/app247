@@ -34,6 +34,10 @@ public class PublicAuthRateLimits {
     @Value("${app.security.onboarding.window:PT1H}") private Duration onboardingWindow;
     @Value("${app.security.onboarding.per-origin:5}") private long onboardingPerOrigin;
 
+    @Value("${app.security.terminal-pairing.window:PT1H}") private Duration pairingWindow;
+    @Value("${app.security.terminal-pairing.start-per-origin:30}") private long pairingStartPerOrigin;
+    @Value("${app.security.terminal-pairing.approval-failures-per-company:10}") private long pairingFailuresPerCompany;
+
     /** Antes de autenticar: CPF com falhas demais fica bloqueado até a janela expirar. */
     public void beforeLogin(String origin, String cpf) {
         if (limiter.isExhausted("login-failure-cpf", normalizeCpf(cpf), loginFailuresPerCpf)
@@ -78,6 +82,26 @@ public class PublicAuthRateLimits {
             log.warn("[AUTH-RATE] operation=ONBOARDING status=RATE_LIMITED");
             throw limited("ONBOARDING_RATE_LIMITED", "Muitos cadastros a partir desta origem. Tente novamente mais tarde.");
         }
+    }
+
+    /** Terminal pedindo código: renova a cada 15 min e vários equipamentos podem dividir o mesmo NAT. */
+    public void beforeTerminalPairing(String origin) {
+        if (!limiter.tryAcquire("terminal-pairing-origin", origin, pairingStartPerOrigin, pairingWindow)) {
+            log.warn("[AUTH-RATE] operation=TERMINAL_PAIRING_START status=RATE_LIMITED");
+            throw limited("PAIRING_RATE_LIMITED", "Muitos pedidos de código de pareamento. Tente novamente mais tarde.");
+        }
+    }
+
+    /** Códigos errados por Empresa: o código é a única barreira contra adivinhação na aprovação. */
+    public void beforeTerminalPairingApproval(String empresaId) {
+        if (limiter.isExhausted("terminal-pairing-failure", empresaId, pairingFailuresPerCompany)) {
+            log.warn("[AUTH-RATE] operation=TERMINAL_PAIRING_APPROVE status=RATE_LIMITED");
+            throw limited("PAIRING_RATE_LIMITED", "Muitos códigos inválidos. Tente novamente mais tarde.");
+        }
+    }
+
+    public void terminalPairingApprovalFailed(String empresaId) {
+        limiter.tryAcquire("terminal-pairing-failure", empresaId, pairingFailuresPerCompany, pairingWindow);
     }
 
     private static ApiBusinessException limited(String code, String message) {

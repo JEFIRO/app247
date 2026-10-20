@@ -105,6 +105,24 @@ public class TerminalRequestAuthorizationService {
         return issue(terminal);
     }
 
+    /**
+     * Emite a credencial de um Terminal recém-pareado. Chamado pelo próprio equipamento
+     * (sem tenant no contexto): o vínculo foi aprovado antes por um gestor da Empresa, e o
+     * serial precisa continuar sendo o da sessão aprovada. Substitui qualquer credencial anterior.
+     */
+    @Transactional
+    public TerminalCredentialResponse issueForPairing(String terminalId, String serialNumber) {
+        Terminal terminal = terminals.findByIdForCredentialUpdate(terminalId).orElseThrow(() ->
+                new ApiBusinessException(HttpStatus.CONFLICT, "TERMINAL_PAIRING_FAILED",
+                        "Pareamento não pode ser concluído; gere um novo código"));
+        if (serialNumber == null || !serialNumber.equals(terminal.getSerialNumber())) {
+            throw new ApiBusinessException(HttpStatus.CONFLICT, "TERMINAL_PAIRING_FAILED",
+                    "Pareamento não pode ser concluído; gere um novo código");
+        }
+        requireOperational(terminal);
+        return issue(terminal);
+    }
+
     @Transactional
     public void revoke(String terminalId) {
         Terminal terminal = credentialTerminalForCurrentTenant(terminalId);

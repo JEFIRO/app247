@@ -86,6 +86,8 @@ public interface PagamentoRepository extends JpaRepository<PaymentAttempt, Strin
     java.util.List<PaymentAttempt> findByOrderIdOrderOrderByAttemptNumberAsc(String orderId);
     boolean existsByEmpresaIdAndStatusIn(String empresaId, Collection<PagamentoStatus> statuses);
 
+    boolean existsByOrder_Terminal_IdTerminalAndStatusIn(String terminalId, Collection<PagamentoStatus> statuses);
+
     @Query("""
             select a.order.idOrder from PaymentAttempt a
             where a.refundRequestedAt is not null

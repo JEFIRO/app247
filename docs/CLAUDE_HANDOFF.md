@@ -179,7 +179,7 @@ Catálogo detalhado com payloads: `24por7_contexto/api.md`; contratos com client
 
 | Acesso | Rotas |
 |---|---|
-| Público | `GET /`, `/error`, `/actuator/health`, `/terminal/health`, `/terminal/serial/*`, `/webhook/mercadopago` (HMAC próprio), `/mercado-pago/oauth/callback`, `/mp/oauth/callback`, `/public/leads`, `/public/app-config`, Swagger/OpenAPI, `POST /onboarding` e alias `POST /condominio`, `POST /auth/{register,login,login/admin,send-code,validate-code}`, `POST /user/{recuperar,validar,redefinir-senha}` |
+| Público | `GET /`, `/error`, `/actuator/health`, `/terminal/health`, `/terminal/serial/*`, `POST /terminal/pairing` e `/terminal/pairing/claim` (limite por origem), `/webhook/mercadopago` (HMAC próprio), `/mercado-pago/oauth/callback`, `/mp/oauth/callback`, `/public/leads`, `/public/app-config`, Swagger/OpenAPI, `POST /onboarding` e alias `POST /condominio`, `POST /auth/{register,login,login/admin,send-code,validate-code}`, `POST /user/{recuperar,validar,redefinir-senha}` |
 | Negado sempre | demais `/auth/**`, `GET /checkout` (vínculo legado por `userId`), `/checkout/session` |
 | `TERMINAL` | `/terminal-socket`, `/payment-socket/**`, `/ws/**`, `/produtos/sync`, `/produtos/home`, `/terminais/*/produtos-disponiveis`, `/terminal/telemetry`, `/terminal/*/bootstrap`, `/terminal/*/factory-reset/**`, `/terminal/customer-link/consume`, `/terminal/coupons/apply`, `/carrinho/**`, `/order/**`, `/pagamento/terminal/**`, `/checkout/carrinho`, `/checkout/qrcode`, `/comprovante/**` |
 | `ADMIN`/`GERENTE` | `/admin/**` (dashboard, alertas, pagamentos, vendas, atividade, **refund** `POST /admin/orders/{orderId}/refund`, App Cliente config/fidelidade/recompensas, convites de vínculo), `/empresas/**`, `/condominios/**` (incl. estoque por condomínio), `/terminais/**` (CRUD, credencial, vínculo Point, telemetria/monitoramento), `/produtos/**` (CRUD, importação XLSX), `/promocoes/**`, `/estoque-empresa/**`, `/estoque/geral`, `/transferencias-estoque/**`, `/inventarios/**`, `/planogramas/**`, `/mercado-pago/**`, `/mp/oauth/{mercadopago,terminal}/**`, `/api/testes/mercadopago/**` |
@@ -330,6 +330,8 @@ git diff --check              → apenas linha em branco extra no fim de .env.ex
   ADMIN/GERENTE. A classe ainda é compilada no jar.
 - Migração legada de credencial (`/terminal/*/credential/migrate`, `TERMINAL_INTERNAL_TOKEN`) removida em
   18/10/2026; `GET /terminal/serial/*` passou a expor só `terminalId`, `serialNumber`, `ativo`, `activated`.
+- Pareamento (20/10/2026): o Terminal mostra código/QR, o gestor confirma no app e o equipamento recebe a
+  credencial sozinho (`TerminalPairingService`, sessões no Redis). Detalhes em `24por7_contexto/terminal-integration.md`.
 - Uso da mesma credencial de Terminal a partir de origens diferentes gera `audit_log`
   `TERMINAL_CREDENTIAL_ORIGIN_CHANGED` (`TerminalCredentialAnomalyService`); só alerta, não bloqueia.
 - Cadastro de cliente usa `X-Forwarded-For` para rate limit (`AuthController.clientIp`), enquanto a recuperação de

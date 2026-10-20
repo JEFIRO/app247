@@ -61,7 +61,7 @@ public class TerminalService {
     public TerminalResponseDTO atualizar(String terminalId, TerminalRequest request) {
         Terminal terminal = getTerminalDoTenant(terminalId);
         terminal.setNome(request.nome());
-        terminal.setSerialNumber(request.serialNumber());
+        terminal.setSerialNumber(serialOrNull(request.serialNumber()));
         terminal.setCodigo(request.nome());
         terminal.setMacAddress(request.macAddress());
         terminal.setIpAddress(request.ipAddress());
@@ -108,8 +108,14 @@ public class TerminalService {
 
     Terminal construir(TerminalRequest request, Condominio condominio) {
         Terminal terminal = new Terminal(request);
+        terminal.setSerialNumber(serialOrNull(request.serialNumber()));
         terminal.setCondominio(condominio);
         return terminal;
+    }
+
+    /** serial_number é UNIQUE: vazio vira NULL para permitir vários Terminais ainda não pareados. */
+    private static String serialOrNull(String serial) {
+        return serial == null || serial.isBlank() ? null : serial.trim();
     }
 
     @Scheduled(fixedRate = 60000)
