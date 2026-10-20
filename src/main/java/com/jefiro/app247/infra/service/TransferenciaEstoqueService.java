@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,8 @@ import java.util.*;
 
 @Service
 public class TransferenciaEstoqueService {
+    private static final Set<String> SORTS=Set.of("createdAt","updatedAt","confirmedAt","cancelledAt","status");
+
     @Autowired private TransferenciaEstoqueRepository transferenciaRepository;
     @Autowired private EstoqueEmpresaRepository estoqueEmpresaRepository;
     @Autowired private EstoqueCondominioRepository estoqueCondominioRepository;
@@ -117,6 +120,7 @@ public class TransferenciaEstoqueService {
     @Transactional(readOnly=true)
     public Page<TransferenciaEstoqueResponse> listar(StatusTransferenciaEstoque status,Pageable pageable){
         String empresaId=EmpresaContext.require();
+        pageable=PagePolicy.sanitize(pageable,Sort.unsorted(),SORTS,"Ordenação de transferências inválida");
         Page<TransferenciaEstoque> pagina=status==null?transferenciaRepository.findAllByEmpresaId(empresaId,pageable)
                 :transferenciaRepository.findAllByEmpresaIdAndStatus(empresaId,status,pageable);
         return pagina.map(t->resposta(t,false));

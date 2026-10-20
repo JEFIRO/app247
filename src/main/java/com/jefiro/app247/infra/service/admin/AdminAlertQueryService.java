@@ -7,18 +7,21 @@ import com.jefiro.app247.domain.model.enum_type.TelemetryAlertType;
 import com.jefiro.app247.domain.model.enum_type.TerminalOperationalStatus;
 import com.jefiro.app247.infra.repository.TerminalTelemetryAlertRepository;
 import com.jefiro.app247.infra.service.EmpresaContext;
+import com.jefiro.app247.infra.service.PagePolicy;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class AdminAlertQueryService {
+    private static final Set<String> SORTS = Set.of("openedAt", "lastObservedAt", "status", "type");
+
     @Autowired private TerminalTelemetryAlertRepository alertRepository;
 
     @Transactional(readOnly = true)
@@ -34,15 +37,8 @@ public class AdminAlertQueryService {
 
     @Transactional(readOnly = true)
     public Page<AdminAlertResponse> list(TelemetryAlertStatus status, Pageable pageable) {
-        int size = Math.min(Math.max(pageable.getPageSize(), 1), 100);
-        Sort sort = pageable.getSort().isSorted()
-                ? pageable.getSort()
-                : Sort.by(Sort.Direction.DESC, "openedAt");
-        if (sort.stream().anyMatch(order -> !List.of("openedAt", "lastObservedAt", "status", "type")
-                .contains(order.getProperty()))) {
-            throw new IllegalArgumentException("Ordenação de alertas inválida");
-        }
         return alertRepository.findAdminAlerts(EmpresaContext.require(), status,
-                PageRequest.of(Math.max(pageable.getPageNumber(), 0), size, sort));
+                PagePolicy.sanitize(pageable, Sort.by(Sort.Direction.DESC, "openedAt"), SORTS,
+                        "Ordenação de alertas inválida"));
     }
 }

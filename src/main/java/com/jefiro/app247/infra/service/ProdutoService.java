@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpStatus;
@@ -31,6 +32,9 @@ import com.jefiro.app247.domain.model.dto.ProdutoCondominioDisponibilidadeRespon
 
 @Service
 public class ProdutoService {
+    static final Set<String> SORTS = Set.of("nome", "codigoInterno", "precoVenda", "categoria",
+            "createdAt", "updatedAt");
+
 
     @Autowired
     private ProdutoRepository produtoRepository;
@@ -189,7 +193,8 @@ public class ProdutoService {
     }
 
     public Page<Produto> listar(Pageable pageable) {
-        return produtoRepository.findAllByEmpresaId(EmpresaContext.require(), pageable);
+        return produtoRepository.findAllByEmpresaId(EmpresaContext.require(),
+                PagePolicy.sanitize(pageable, Sort.unsorted(), SORTS, "Ordenação de produtos inválida"));
     }
 
     public Produto buscarPorCodigo(String codigo) {

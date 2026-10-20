@@ -6,11 +6,11 @@ import com.jefiro.app247.domain.model.enum_type.PagamentoStatus;
 import com.jefiro.app247.domain.model.enum_type.PaymentProvider;
 import com.jefiro.app247.infra.repository.PagamentoRepository;
 import com.jefiro.app247.infra.service.EmpresaContext;
+import com.jefiro.app247.infra.service.PagePolicy;
 import com.jefiro.app247.infra.service.TimePolicy;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -71,12 +71,7 @@ public class AdminPaymentQueryService {
     }
 
     private Pageable sanitize(Pageable pageable) {
-        int size = Math.min(Math.max(pageable.getPageSize(), 1), 100);
-        Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : Sort.by(Sort.Direction.DESC, "createdAt");
-        if (sort.stream().anyMatch(order -> !SORTS.contains(order.getProperty()))) {
-            throw new IllegalArgumentException("Ordenação de pagamentos inválida");
-        }
-        return PageRequest.of(Math.max(pageable.getPageNumber(), 0), size, sort);
+        return PagePolicy.sanitize(pageable, Sort.by(Sort.Direction.DESC, "createdAt"), SORTS, "Ordenação de pagamentos inválida");
     }
 
     private String blank(String value) {

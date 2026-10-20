@@ -7,9 +7,11 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -19,6 +21,7 @@ import java.util.UUID;
 @Service
 public class TestarWebhookMP {
     private static final Logger log = LoggerFactory.getLogger(TestarWebhookMP.class);
+    private static final String MP_ORDERS_URL = "https://api.mercadopago.com/v1/orders";
 
     private final RestTemplate restTemplate;
     private final OrderService orderService;
@@ -62,40 +65,29 @@ public class TestarWebhookMP {
      */
     private String criarOrder(boolean tentarLimparAntes, String externalReference) {
         validarConfiguracaoDeTeste();
-        String createUrl = "https://api.mercadopago.com/v1/orders";
+        String createUrl = MP_ORDERS_URL;
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(accessToken);
         headers.set("X-Idempotency-Key", UUID.randomUUID().toString());
 
-        String body = """
-                {
-                  "type": "point",
-                  "external_reference": "%s",
-                  "expiration_time": "PT2M",
-                  "transactions": {
-                    "payments": [
-                      {
-                        "amount": "50.00"
-                      }
-                    ]
-                  },
-                  "config": {
-                    "point": {
-                      "terminal_id": "%s",
-                      "print_on_terminal": "no_ticket"
-                    },
-                    "payment_method": {
-                      "default_type": "credit_card",
-                      "default_installments": 1,
-                      "installments_cost": "seller"
-                    }
-                  }
-                }
-                """.formatted(externalReference, terminalId);
+        // Corpo serializado pelo Jackson: valores nunca são interpolados no JSON.
+        Map<String, Object> body = Map.of(
+                "type", "point",
+                "external_reference", externalReference,
+                "expiration_time", "PT2M",
+                "transactions", Map.of("payments", List.of(Map.of("amount", "50.00"))),
+                "config", Map.of(
+                        "point", Map.of(
+                                "terminal_id", terminalId,
+                                "print_on_terminal", "no_ticket"),
+                        "payment_method", Map.of(
+                                "default_type", "credit_card",
+                                "default_installments", 1,
+                                "installments_cost", "seller")));
 
-        HttpEntity<String> request = new HttpEntity<>(body, headers);
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
 
         try {
             // Trocado JsonNode -> Map<String, Object>: o conversor Jackson usado
@@ -195,16 +187,17 @@ public class TestarWebhookMP {
      * processed, failed, canceled, expired, refunded, action_required).
      */
     public Map<String, Object> listarOrders(String beginDate, String endDate, String status) {
-        StringBuilder url = new StringBuilder("https://api.mercadopago.com/v1/orders")
-                .append("?begin_date=").append(beginDate)
-                .append("&end_date=").append(endDate)
-                .append("&type=point")
-                .append("&page_size=50")
-                .append("&sort_by=created_date")
-                .append("&sort_order=desc");
+        // queryParam + encode: valores do cliente não conseguem injetar parâmetros extras na URL.
+        UriComponentsBuilder url = UriComponentsBuilder.fromUriString(MP_ORDERS_URL)
+                .queryParam("begin_date", beginDate)
+                .queryParam("end_date", endDate)
+                .queryParam("type", "point")
+                .queryParam("page_size", 50)
+                .queryParam("sort_by", "created_date")
+                .queryParam("sort_order", "desc");
 
         if (status != null && !status.isBlank()) {
-            url.append("&status=").append(status);
+            url.queryParam("status", status);
         }
 
         HttpHeaders headers = new HttpHeaders();
@@ -213,7 +206,7 @@ public class TestarWebhookMP {
         HttpEntity<Void> request = new HttpEntity<>(headers);
 
         ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url.toString(),
+                url.encode().build().toUri(),
                 HttpMethod.GET,
                 request,
                 new ParameterizedTypeReference<Map<String, Object>>() {
@@ -230,7 +223,7 @@ public class TestarWebhookMP {
      * (cancelamento assíncrono, confirmado depois por webhook).
      */
     public void cancelarOrder(String orderId) {
-        String url = "https://api.mercadopago.com/v1/orders/" + orderId + "/cancel";
+        URI url = orderUri(orderId, "cancel");
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -258,7 +251,7 @@ public class TestarWebhookMP {
      * @param bodyJson corpo já formatado em JSON (status + detalhes)
      */
     private void simularStatus(String orderId, String bodyJson) {
-        String url = "https://api.mercadopago.com/v1/orders/" + orderId + "/events";
+        URI url = orderUri(orderId, "events");
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -452,6 +445,18 @@ public class TestarWebhookMP {
                 """;
         simularStatus(orderId, body);
         return orderId;
+    }
+
+    /** orderId vai como segmento codificado: "../" ou "?" não alcançam outros endpoints do Mercado Pago. */
+    private URI orderUri(String orderId, String acao) {
+        if (orderId == null || orderId.isBlank()) {
+            throw new IllegalArgumentException("orderId obrigatório");
+        }
+        return UriComponentsBuilder.fromUriString(MP_ORDERS_URL)
+                .pathSegment(orderId, acao)
+                .encode()
+                .build()
+                .toUri();
     }
 
     private void validarConfiguracaoDeTeste() {

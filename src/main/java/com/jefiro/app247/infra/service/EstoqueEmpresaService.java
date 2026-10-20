@@ -11,6 +11,7 @@ import com.jefiro.app247.infra.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,10 +21,14 @@ import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 public class EstoqueEmpresaService {
+    private static final Set<String> ESTOQUE_SORTS=Set.of("produto.nome","produto.codigoInterno","produto.categoria",
+            "quantidade","ativo","createdAt","updatedAt");
+
     @Autowired private EstoqueEmpresaRepository estoqueRepository;
     @Autowired private MovimentacaoEstoqueRepository movimentoRepository;
     @Autowired private ProdutoRepository produtoRepository;
@@ -36,7 +41,8 @@ public class EstoqueEmpresaService {
                                                Boolean ativo, Pageable pageable) {
         String empresaId=EmpresaContext.require();
         String termo=busca==null||busca.isBlank()?null:busca.trim();
-        Page<EstoqueEmpresa> pagina=estoqueRepository.pesquisar(empresaId,termo,categoria,ativo,pageable);
+        Page<EstoqueEmpresa> pagina=estoqueRepository.pesquisar(empresaId,termo,categoria,ativo,
+                PagePolicy.sanitize(pageable,Sort.unsorted(),ESTOQUE_SORTS,"Ordenação de estoque inválida"));
         List<String> produtos=pagina.getContent().stream().map(e->e.getProduto().getIdProduto()).toList();
         Map<String,PlanogramaProduto> localizacoes=new HashMap<>();
         if(!produtos.isEmpty()){
@@ -54,7 +60,9 @@ public class EstoqueEmpresaService {
 
     @Transactional(readOnly=true)
     public Page<ProdutoResponse> listarProdutos(Pageable pageable) {
-        return produtoRepository.findAllByEmpresaId(EmpresaContext.require(),pageable).map(ProdutoResponse::new);
+        return produtoRepository.findAllByEmpresaId(EmpresaContext.require(),
+                PagePolicy.sanitize(pageable,Sort.unsorted(),ProdutoService.SORTS,"Ordenação de produtos inválida"))
+                .map(ProdutoResponse::new);
     }
 
     @Transactional

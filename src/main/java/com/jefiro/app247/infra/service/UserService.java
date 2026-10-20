@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -34,10 +35,13 @@ import org.springframework.web.server.ResponseStatusException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.Set;
 import java.util.NoSuchElementException;
 
 @Service
 public class UserService {
+    private static final Set<String> ORDER_SORTS = Set.of("createdAt", "status", "totalCobrado");
+
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     @Autowired
     RedisTemplate<String, Object> redisTemplate;
@@ -124,7 +128,8 @@ public class UserService {
     public Page<OrderDTO> getOrderByUser(User target, Pageable pageable) {
         if (target.getEmpresa() == null) return Page.empty(pageable);
         return orderRepository.findOrderDtosByUserAndEmpresa(
-                target.getIdUser(), target.getEmpresa().getId(), pageable);
+                target.getIdUser(), target.getEmpresa().getId(),
+                PagePolicy.sanitize(pageable, Sort.unsorted(), ORDER_SORTS, "Ordenação de compras inválida"));
     }
 
     public void cadastrar(@Valid UserRequestDTO requestDTO) {

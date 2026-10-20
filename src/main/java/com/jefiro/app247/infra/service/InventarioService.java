@@ -10,6 +10,7 @@ import com.jefiro.app247.infra.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,9 @@ import java.util.*;
 
 @Service
 public class InventarioService {
+    private static final Set<String> SORTS = Set.of("createdAt", "startedAt", "finalizedAt", "cancelledAt",
+            "status", "localTipo", "descricao");
+
     @Autowired private InventarioRepository inventarioRepository;
     @Autowired private InventarioItemRepository itemRepository;
     @Autowired private EstoqueEmpresaRepository estoqueEmpresaRepository;
@@ -191,7 +195,8 @@ public class InventarioService {
 
     @Transactional(readOnly = true)
     public Page<InventarioResponse> listar(InventarioStatus status, TipoLocalEstoque localTipo, Pageable pageable) {
-        return inventarioRepository.pesquisar(EmpresaContext.require(), status, localTipo, pageable)
+        return inventarioRepository.pesquisar(EmpresaContext.require(), status, localTipo,
+                        PagePolicy.sanitize(pageable, Sort.unsorted(), SORTS, "Ordenação de inventários inválida"))
                 .map(this::resposta);
     }
 
