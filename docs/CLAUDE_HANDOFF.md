@@ -243,7 +243,7 @@ Pontos de atenção da API:
 
 | Integração | Onde | Estado |
 |---|---|---|
-| Mercado Pago OAuth + Orders Point + webhook | `OauthMercadoPagoService`, `MercadoPagoCobrancaService`, `MercadoPagoOrderQueryService`, `PaymentWorker`, `MercadoPagoWebhookSignatureService` | Validado com mocks/stub; **não verificável** contra MP real nesta auditoria. Sem refresh automático de token OAuth. |
+| Mercado Pago OAuth + Orders Point + webhook | `OauthMercadoPagoService`, `MercadoPagoCobrancaService`, `MercadoPagoOrderQueryService`, `PaymentWorker`, `MercadoPagoWebhookSignatureService` | Validado com mocks/stub; **não verificável** contra MP real nesta auditoria. Refresh automático do token OAuth (`MercadoPagoTokenRefreshService`, 6 h, 30 dias antes de vencer) testado com HTTP simulado. |
 | PIX / Checkout Pro | — | **Ausente**: a classe `MercadoPagoService` citada em `contexto.md` não existe mais no código. |
 | FastAPI `comprovante-service` → n8n | `infra/service/comprovante/*` | Testes mockam `RestTemplate`; ponta a ponta **não validado**. |
 | SMTP (JavaMail) | `EmailWorker` + fila Redis | Não verificável (sem SMTP real). |
@@ -278,7 +278,7 @@ Pontos de atenção da API:
 | Consumo de cashback | **Ausente** | `backend-pending.md` |
 | Workflow de suporte de compra | **Parcial** (só abertura `OPEN`) | `backend-pending.md` |
 | Termos/Privacidade com aceite | **Ausente/operacional** (URLs vazias por padrão; Compose não repassa `APP247_*`) | `docker-compose*.yml`, `LegalDocumentsService` |
-| Refresh OAuth MP | **Ausente** | docs `mercado-pago.md` |
+| Refresh OAuth MP | Implementado (20/10/2026), não verificado contra MP real | docs `mercado-pago.md` |
 | Checkout Pro / PIX | **Ausente** | `MercadoPagoService` não existe em `infra/service` |
 | Perfil `dev` | **Validado** (boot manual com MySQL/Redis descartáveis) | `application-dev.properties` |
 | Endpoints de teste MP desligados por padrão e em `prod` | **Validado** | `TestarWebhookMPControllerRegistrationTest` |
@@ -371,7 +371,7 @@ Corrigidas em 14/10/2026 após verificação no código:
 5. ~~Perfil `dev`~~ e ~~endpoints de teste ligados por padrão~~ — resolvidos em 14/10/2026.
 6. Opcional: tirar `TestarWebhookMP*` do jar de produção (hoje só não é registrado).
 7. JWT: TTL configurável e decisão sobre refresh/revogação (401 `TOKEN_INVALID` para token inválido feito em 18/10/2026).
-8. Refresh automático do token OAuth Mercado Pago.
+8. ~~Refresh automático do token OAuth Mercado Pago~~ (feito em 20/10/2026; confirmar a primeira renovação real no AuditLog `MERCADO_PAGO_TOKEN_REFRESHED`).
 9. Recuperação automática de mensagens presas em `processing` no Redis.
 10. Produto: cashback consumível, ledger de pontos tipado, workflow de suporte, termos/privacidade com aceite,
     comprovante unificado, paginação do catálogo App Cliente no banco, política de saldo zero/negativo.

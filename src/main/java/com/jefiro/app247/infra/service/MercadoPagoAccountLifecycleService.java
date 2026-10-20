@@ -144,7 +144,8 @@ public class MercadoPagoAccountLifecycleService {
         MercadoPagoConta conta = ativaRepository.findWithBindingByMpUserId(mpUserId)
                 .map(MercadoPagoContaAtiva::getConta)
                 .orElseThrow(this::notConfigured);
-        if (!conta.isActive() || conta.getAccessToken() == null || conta.getAccessToken().isBlank()) {
+        if (!conta.isActive() || conta.getAccessToken() == null || conta.getAccessToken().isBlank()
+                || conta.getDataExpiracao() == null || !conta.getDataExpiracao().isAfter(Instant.now())) {
             throw notConfigured();
         }
         return conta;

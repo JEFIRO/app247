@@ -19,6 +19,12 @@ import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.http.HttpEntity;
+import org.springframework.util.MultiValueMap;
+import org.mockito.ArgumentCaptor;
+import com.jefiro.app247.infra.exception.ExternalServiceException;
 
 import java.util.Optional;
 
@@ -114,6 +120,45 @@ class OauthMercadoPagoServiceTest {
         assertEquals("Esta conta Mercado Pago já está vinculada a outra empresa no sistema.",
                 result.message());
         verify(redisTemplate, never()).delete("oauth:mp:result:empresa-b");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void renovarTokenEnviaGrantRefreshTokenSemRedirectUri() {
+        MercadoPagoTokenResponse token = new MercadoPagoTokenResponse(
+                "novo", "bearer", 15552000L, "offline_access", "mp-user-a", "refresh-2", "public", true);
+        when(restTemplate.postForEntity(anyString(), any(), eq(MercadoPagoTokenResponse.class)))
+                .thenReturn(ResponseEntity.ok(token));
+
+        assertSame(token, service().renovarToken("refresh-1"));
+
+        ArgumentCaptor<HttpEntity<MultiValueMap<String, String>>> request = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).postForEntity(eq("https://api.mercadopago.com/oauth/token"), request.capture(),
+                eq(MercadoPagoTokenResponse.class));
+        MultiValueMap<String, String> body = request.getValue().getBody();
+        assertEquals("refresh_token", body.getFirst("grant_type"));
+        assertEquals("refresh-1", body.getFirst("refresh_token"));
+        assertEquals("client", body.getFirst("client_id"));
+        assertFalse(body.containsKey("redirect_uri"));
+    }
+
+    @Test
+    void renovarTokenRecusadoViraCodigoDeDominio() {
+        when(restTemplate.postForEntity(anyString(), any(), eq(MercadoPagoTokenResponse.class)))
+                .thenThrow(HttpClientErrorException.create(HttpStatus.BAD_REQUEST, "Bad Request",
+                        null, "{\"error\":\"invalid_grant\"}".getBytes(), null));
+
+        ApiBusinessException error = assertThrows(ApiBusinessException.class,
+                () -> service().renovarToken("refresh-revogado"));
+        assertEquals("MERCADO_PAGO_REFRESH_REJECTED", error.getCode());
+    }
+
+    @Test
+    void renovarTokenComFalhaDeRedeNaoEhRecusa() {
+        when(restTemplate.postForEntity(anyString(), any(), eq(MercadoPagoTokenResponse.class)))
+                .thenThrow(new ResourceAccessException("timeout"));
+
+        assertThrows(ExternalServiceException.class, () -> service().renovarToken("refresh-1"));
     }
 
     private OauthMercadoPagoService service() {

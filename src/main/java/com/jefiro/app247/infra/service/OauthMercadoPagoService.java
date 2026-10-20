@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 
 import java.time.Duration;
@@ -155,26 +156,53 @@ public class OauthMercadoPagoService {
     }
 
     private MercadoPagoTokenResponse trocarCodigo(String code) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("client_id", clientId);
         body.add("client_secret", clientSecret);
         body.add("grant_type", "authorization_code");
         body.add("code", code);
         body.add("redirect_uri", redirectUri);
-
-        ResponseEntity<MercadoPagoTokenResponse> response;
         try {
-            response = restTemplate.postForEntity(
-                    "https://api.mercadopago.com/oauth/token",
-                    new HttpEntity<>(body, headers),
-                    MercadoPagoTokenResponse.class
-            );
+            return postToken(body);
         } catch (RestClientException e) {
             throw new ExternalServiceException("Mercado Pago",
                     "Falha ao trocar código OAuth", e);
         }
+    }
+
+    /**
+     * Troca o refresh token por um novo par de tokens. O Mercado Pago invalida o refresh token
+     * usado, então quem chama precisa persistir a resposta inteira.
+     *
+     * @throws ApiBusinessException {@code MERCADO_PAGO_REFRESH_REJECTED} quando o Mercado Pago
+     *         recusa o refresh token (revogado, expirado ou já usado): só uma nova autorização resolve
+     * @throws ExternalServiceException em falhas transitórias (rede, 5xx)
+     */
+    public MercadoPagoTokenResponse renovarToken(String refreshToken) {
+        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+        body.add("client_id", clientId);
+        body.add("client_secret", clientSecret);
+        body.add("grant_type", "refresh_token");
+        body.add("refresh_token", refreshToken);
+        try {
+            return postToken(body);
+        } catch (HttpClientErrorException rejected) {
+            throw new ApiBusinessException(HttpStatus.BAD_GATEWAY, "MERCADO_PAGO_REFRESH_REJECTED",
+                    "Mercado Pago recusou a renovação do token (HTTP " + rejected.getStatusCode().value() + ")");
+        } catch (RestClientException e) {
+            throw new ExternalServiceException("Mercado Pago",
+                    "Falha ao renovar token OAuth", e);
+        }
+    }
+
+    private MercadoPagoTokenResponse postToken(MultiValueMap<String, String> body) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        ResponseEntity<MercadoPagoTokenResponse> response = restTemplate.postForEntity(
+                "https://api.mercadopago.com/oauth/token",
+                new HttpEntity<>(body, headers),
+                MercadoPagoTokenResponse.class
+        );
         if (response.getBody() == null) {
             throw new IllegalStateException("Mercado Pago retornou OAuth sem corpo");
         }
