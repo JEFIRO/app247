@@ -131,9 +131,10 @@ Executar localmente: suba MySQL/Redis com `docker compose -f docker-compose.test
 (Flyway migra o banco apontado; não use um banco com dados que você não queira migrar). O E2E usa `prod` + `DB_URL`
 (`scripts/e2e-terminal-backend.sh:75-88`).
 
-Dados de teste locais: ative `SPRING_PROFILES_ACTIVE=dev,seed` para aplicar `db/seed-dev/R__usuarios_teste.sql`
-(Empresa Teste, 3 condomínios, 1 ADMIN + 1 USER em cada, senha `Teste@123`). O seed vale para o banco apontado por
-`DB_URL`: confira antes e nunca ative o perfil `seed` em ambiente implantado. Detalhes em `24por7_contexto/database.md`.
+Usuários de teste: a `V23` cria em todo ambiente, inclusive produção, a Empresa Teste, 3 condomínios e 1 ADMIN + 1 USER
+em cada, com senha aleatória (só o hash está no repositório). Localmente, `SPRING_PROFILES_ACTIVE=dev,seed` aplica
+`db/seed-dev/R__usuarios_teste.sql`, que troca a senha por `Teste@123`. O seed vale para o banco apontado por `DB_URL`:
+confira antes e nunca ative o perfil `seed` em ambiente implantado. Detalhes em `24por7_contexto/database.md`.
 
 Compose:
 - `deploy/docker-compose.yml`: `app` + `nginx` + `ngrok` + `redis` + `comprovante-service`; banco **externo** via `DB_URL`
@@ -145,7 +146,7 @@ Compose:
 
 ## 4. Banco de dados e migrations
 
-- Diretório: `src/main/resources/db/migration`, **V1 a V22** (1742 linhas SQL).
+- Diretório: `src/main/resources/db/migration`, **V1 a V23**.
   `V1__core_tenant` … `V19__order_price_payment_attempt_and_terminal_authorization`,
   `V20__terminal_device_credentials`, `V21__customer_terminal_link`, `V22__point_refund_and_loyalty_reversal`.
 - V20–V22 foram commitadas localmente em `869f575`; `origin/master` tem apenas V1–V13 (o próximo deploy aplica V14–V22).

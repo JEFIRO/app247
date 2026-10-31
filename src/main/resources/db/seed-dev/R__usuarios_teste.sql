@@ -1,7 +1,7 @@
--- Dados de teste para ambiente local. NUNCA mover para db/migration: esta pasta so entra no
--- Flyway com o perfil "seed" (application-seed.properties), para que o deploy nao crie estes logins.
--- Senha de todos os usuarios: Teste@123
--- Repetivel e idempotente: reexecuta se este arquivo mudar e nao sobrescreve registros existentes.
+-- Senha conhecida para ambiente local. NUNCA mover para db/migration: esta pasta so entra no
+-- Flyway com o perfil "seed" (application-seed.properties). Os logins de producao vem da V23.
+-- Senha de todos os usuarios neste perfil: Teste@123
+-- Repetivel e idempotente: reexecuta se este arquivo mudar. So altera a senha dos usuarios, criados pela V23.
 
 SET @agora = UTC_TIMESTAMP(6);
 SET @senha = '$2a$10$4C/zwvdRX9hp3js2bWufNeQRZ6UL.olI3W75OYBMa8cWDoOWR/IIe';
@@ -35,4 +35,4 @@ FROM (
     ROW('a2470000-0000-4000-8000-00000000b003', @empresa_id, @condominio_3_id, 'Usuario', 'Teste 3', 'user3@app247.test', @senha, '24700001305', 'USER')
     ) AS t (id, empresa_id, condominio_id, nome, sobrenome, email, senha, cpf, role)
 ) AS seed
-ON DUPLICATE KEY UPDATE updated_at = users.updated_at;
+ON DUPLICATE KEY UPDATE senha = seed.senha;
