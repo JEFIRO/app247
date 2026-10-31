@@ -131,6 +131,10 @@ Executar localmente: suba MySQL/Redis com `docker compose -f docker-compose.test
 (Flyway migra o banco apontado; não use um banco com dados que você não queira migrar). O E2E usa `prod` + `DB_URL`
 (`scripts/e2e-terminal-backend.sh:75-88`).
 
+Dados de teste locais: ative `SPRING_PROFILES_ACTIVE=dev,seed` para aplicar `db/seed-dev/R__usuarios_teste.sql`
+(Empresa Teste, 3 condomínios, 1 ADMIN + 1 USER em cada, senha `Teste@123`). O seed vale para o banco apontado por
+`DB_URL`: confira antes e nunca ative o perfil `seed` em ambiente implantado. Detalhes em `24por7_contexto/database.md`.
+
 Compose:
 - `deploy/docker-compose.yml`: `app` + `nginx` + `ngrok` + `redis` + `comprovante-service`; banco **externo** via `DB_URL`
   (formato de produção/EC2).
