@@ -49,10 +49,10 @@ class ResidualHttpAuthorizationIntegrationTest {
     void setup() {
         Empresa a = empresa("A");
         Empresa b = empresa("B");
-        userA = user(a, "52998224725", RoleUser.USER);
-        userA2 = user(a, "11144477735", RoleUser.USER);
-        adminA = user(a, "39053344705", RoleUser.ADMIN);
-        userB = user(b, "93541134780", RoleUser.USER);
+        userA = user(a, "61000001130", RoleUser.USER);
+        userA2 = user(a, "61000002292", RoleUser.USER);
+        adminA = user(a, "61000003345", RoleUser.ADMIN);
+        userB = user(b, "61000004406", RoleUser.USER);
     }
 
     @Test
