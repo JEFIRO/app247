@@ -229,6 +229,9 @@ public class EstoqueService {
         movimento.setMotivo(motivo);
         movimento.setChaveIdempotencia(chave != null ? chave : "MANUAL:" + java.util.UUID.randomUUID());
         movimentacaoRepository.save(movimento);
+        log.info("[ESTOQUE] tipo={} orderId={} produtoId={} delta={} anterior={} posterior={} motivo={}",
+                tipo, order != null ? order.getIdOrder() : null, estoque.getProduto().getIdProduto(),
+                delta, anterior, posterior, motivo);
         if (posterior.signum() < 0) {
             log.warn("Estoque negativo: condominio={}, produto={}, quantidade={}",
                     estoque.getCondominio().getIdCondominio(), estoque.getProduto().getIdProduto(), posterior);

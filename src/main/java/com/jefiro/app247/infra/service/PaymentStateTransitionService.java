@@ -156,6 +156,11 @@ public class PaymentStateTransitionService {
             if (order.getCarrinho() != null) carrinhoService.save(order.getCarrinho());
         }
         if (domainEvent != null) eventPublisher.publishEvent(domainEvent);
+        if (domainEvent instanceof OrderPaidEvent) {
+            log.info("[PAYMENT-CONFIRMADO] orderId={} paymentId={} transition={}->{} valor={} transactionId={}",
+                    order.getIdOrder(), pagamento.getIdPagamento(), localStatus, remoteStatus,
+                    order.getTotalCobrado(), pagamento.getTransactionId());
+        }
         if (stateChanged) {
             eventPublisher.publishEvent(new PaymentEvent(PointPaymentResponse.from(order)));
             log.info("[PAYMENT-RECONCILIATION] orderId={} paymentId={} localStatus={} remoteStatus={} transition={}->{} terminal notified after commit",
