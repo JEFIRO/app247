@@ -15,6 +15,8 @@ import com.jefiro.app247.infra.repository.CustomerCouponRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -118,6 +120,31 @@ class PointPaymentPersistenceServiceTest {
         assertThat(order.getPagamento().getOrder()).isSameAs(order);
         verify(orderRepository).saveAndFlush(order);
         verify(pagamentoRepository).flush();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PagamentoStatus.class, names = {"PROCESSED", "REFUNDED"})
+    void repeticaoAposDesfechoDevolveAOrderSemNovaCobranca(PagamentoStatus status) {
+        pagarOrder(status, OrderStatus.valueOf(status.name()));
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
+
+        var result = service.prepare("cart-a");
+
+        assertThat(result.orderId()).isEqualTo("order-a");
+        assertThat(result.paymentAttemptId()).isEqualTo("payment-a");
+        assertThat(result.shouldSubmit()).isFalse();
+        verify(pagamentoRepository, never()).save(any(PaymentAttempt.class));
+        verifyNoInteractions(priceFinalizationService, eventPublisher);
+    }
+
+    private void pagarOrder(PagamentoStatus attemptStatus, OrderStatus orderStatus) {
+        PaymentAttempt pagamento = new PaymentAttempt(order);
+        pagamento.setIdPagamento("payment-a");
+        pagamento.setStatus(attemptStatus);
+        order.setPagamento(pagamento);
+        order.setStatus(orderStatus);
+        when(carrinhoService.getByIdForUpdate("cart-a")).thenReturn(carrinho);
+        when(orderService.criarCobranca(carrinho)).thenReturn(order);
     }
 
     @Test

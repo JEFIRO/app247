@@ -50,7 +50,7 @@ public class PagamentoController {
             description = "X-Terminal-Token e X-Terminal-Id são obrigatórios. O backend ignora qualquer total externo e usa o snapshot da Order. Repetição da mesma operação retorna a tentativa ativa; retry financeiro após estado terminal cria nova tentativa.",
             security = @SecurityRequirement(name = "terminalToken"))
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Tentativa criada, retomada ou estado UNKNOWN conservado"),
+            @ApiResponse(responseCode = "200", description = "Tentativa criada, retomada, já aprovada ou estado UNKNOWN conservado"),
             @ApiResponse(responseCode = "401", description = "Credencial interna inválida"),
             @ApiResponse(responseCode = "404", description = "Carrinho não pertence ao Terminal"),
             @ApiResponse(responseCode = "409", description = "ACTIVE_PAYMENT_ATTEMPT_EXISTS, PAYMENT_ALREADY_ACTIVE, ORDER_PRICE_NOT_FINALIZED ou erro de cupom")

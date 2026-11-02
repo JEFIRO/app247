@@ -135,8 +135,8 @@ public class PointPaymentPersistenceService {
             eventPublisher.publishEvent(new OrderPaymentRetryEvent(order, pagamento.getAttemptNumber()));
             paymentCreated = true;
         } else {
-            throw new ApiBusinessException(HttpStatus.CONFLICT, "ORDER_NOT_PAYABLE",
-                    "Order já foi paga ou não permite nova tentativa");
+            // Aprovada ou estornada: Terminal que perdeu a resposta inicial descobre o desfecho por aqui.
+            paymentCreated = false;
         }
 
         orderRepository.saveAndFlush(order);
