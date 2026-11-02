@@ -3,9 +3,12 @@ package com.jefiro.app247.infra.service.comprovante;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.jefiro.app247.domain.model.Condominio;
 import com.jefiro.app247.domain.model.Order;
-import com.jefiro.app247.domain.model.OrderItem;
 import com.jefiro.app247.domain.model.PaymentAttempt;
 import com.jefiro.app247.domain.model.auth.Endereco;
+import com.jefiro.app247.domain.model.dto.comprovante.ComprovanteDigitalResponse;
+import com.jefiro.app247.domain.model.dto.comprovante.ComprovanteDigitalResponse.Estabelecimento;
+import com.jefiro.app247.domain.model.dto.comprovante.ComprovanteDigitalResponse.Fidelidade;
+import com.jefiro.app247.domain.model.dto.comprovante.ComprovanteDigitalResponse.Pagamento;
 import com.jefiro.app247.domain.model.enum_type.PagamentoStatus;
 import com.jefiro.app247.domain.model.enum_type.PagamentoTipo;
 import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
@@ -15,7 +18,6 @@ import org.springframework.http.HttpStatus;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.NumberFormat;
-import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Currency;
@@ -38,7 +40,8 @@ public record ComprovanteCompraRequest(
         String total,
         String pagamento,
         String status,
-        @JsonProperty("qr_data") String qrData
+        @JsonProperty("qr_data") String qrData,
+        ComprovanteDetalhesRequest detalhes
 ) {
     static final ZoneId RECEIPT_ZONE = ZoneId.of("America/Bahia");
     static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -53,29 +56,51 @@ public record ComprovanteCompraRequest(
         return formatter;
     });
 
-    public ComprovanteCompraRequest(Order order) {
-        this(from(order));
-    }
-
-    private ComprovanteCompraRequest(ReceiptFields fields) {
-        this(
-                fields.empresa,
-                fields.cnpj,
-                fields.endereco,
-                fields.local,
-                fields.pedido,
-                fields.data,
-                fields.terminal,
-                fields.hora,
-                fields.itens,
-                fields.total,
-                fields.pagamento,
-                "APROVADO",
-                ""
+    /** Projeta os dados estruturados no contrato de apresentação do serviço Python. */
+    static ComprovanteCompraRequest de(ComprovanteDigitalResponse comprovante) {
+        Estabelecimento estabelecimento = comprovante.estabelecimento();
+        Pagamento pagamento = comprovante.pagamento();
+        Fidelidade fidelidade = comprovante.fidelidade();
+        return new ComprovanteCompraRequest(
+                estabelecimento.nome(),
+                estabelecimento.cnpj(),
+                estabelecimento.endereco(),
+                estabelecimento.local(),
+                comprovante.numeroCompra(),
+                comprovante.data(),
+                comprovante.terminal().codigo(),
+                comprovante.hora(),
+                comprovante.itens().stream().map(ComprovanteCompraRequest::mapItem).toList(),
+                formatCurrency(comprovante.total()),
+                pagamento.forma(),
+                pagamento.status(),
+                "",
+                new ComprovanteDetalhesRequest(
+                        formatCurrency(comprovante.subtotal()),
+                        comprovante.descontos().stream()
+                                .map(desconto -> new DescontoComprovanteRequest(
+                                        desconto.descricao(), formatCurrency(desconto.valor())))
+                                .toList(),
+                        comprovante.arredondamento().signum() == 0
+                                ? null : formatCurrency(comprovante.arredondamento()),
+                        pagamento.bandeira(),
+                        pagamento.parcelas(),
+                        pagamento.transacaoId(),
+                        pagamento.nsu(),
+                        pagamento.autorizacao(),
+                        comprovante.cliente().vinculado(),
+                        comprovante.cliente().primeiroNome(),
+                        fidelidade == null ? null : fidelidade.pontosGanhos(),
+                        fidelidade == null || fidelidade.cashbackGanho() == null
+                                ? null : formatCurrency(fidelidade.cashbackGanho()),
+                        contato(estabelecimento),
+                        estabelecimento.logoUrl()
+                )
         );
     }
 
-    private static ReceiptFields from(Order order) {
+    /** Regras comuns a todo comprovante: venda aprovada e dados históricos completos. */
+    static void validar(Order order) {
         require(order != null, "Pedido não informado");
         require(order.getStatus() == OrderStatus.PROCESSED,
                 "O comprovante só pode ser enviado para pedido aprovado");
@@ -97,51 +122,29 @@ public record ComprovanteCompraRequest(
         require(order.getItems() != null && !order.getItems().isEmpty(), "Pedido sem itens");
         require(order.getTotalCobrado() != null, "Pedido sem total cobrado");
         require(payment.getTipo() != null, "Pagamento sem meio de pagamento");
+    }
 
-        Condominio condominio = order.getCondominio();
-        Endereco address = condominio.getEndereco();
-        Instant paidAt = payment.getPaidAt();
-
-        List<ItemComprovanteRequest> items = order.getItems().stream()
-                .map(ComprovanteCompraRequest::mapItem)
-                .toList();
-
-        return new ReceiptFields(
-                order.getEmpresa().getNomeFantasia(),
-                order.getEmpresa().getCnpj(),
-                formatAddress(address),
-                formatLocation(condominio, address),
-                order.getIdOrder(),
-                paidAt.atZone(RECEIPT_ZONE).format(DATE_FORMAT),
-                order.getTerminal().getCodigo(),
-                paidAt.atZone(RECEIPT_ZONE).format(TIME_FORMAT),
-                items,
-                formatCurrency(order.getTotalCobrado()),
-                paymentLabel(payment.getTipo())
+    // `valor` usa o preço original: os descontos aparecem em linhas próprias e a conta fecha.
+    private static ItemComprovanteRequest mapItem(ComprovanteDigitalResponse.Item item) {
+        return new ItemComprovanteRequest(
+                item.descricao(),
+                quantidade(item.quantidade()),
+                formatCurrency(item.subtotal()),
+                formatCurrency(item.valorUnitario())
         );
     }
 
-    private static ItemComprovanteRequest mapItem(OrderItem item) {
-        require(item != null, "Pedido possui item inválido");
-        require(notBlank(item.getNome()), "Item do pedido sem nome");
-        require(item.getQuantidade() != null, "Item do pedido sem quantidade");
-        require(item.getSubtotalCalculado() != null, "Item do pedido sem subtotal histórico");
+    /** Evita notação científica e casas vazias, mantendo inteiros como inteiros no JSON. */
+    private static BigDecimal quantidade(BigDecimal value) {
+        BigDecimal normalized = value.stripTrailingZeros();
+        return normalized.scale() < 0 ? normalized.setScale(0) : normalized;
+    }
 
-        final int quantity;
-        try {
-            quantity = item.getQuantidade().intValueExact();
-        } catch (ArithmeticException exception) {
-            throw invalidData("Quantidade não inteira não é suportada pelo contrato do comprovante");
-        }
-        require(quantity > 0, "Item do pedido com quantidade inválida");
-
-        // O contrato Python exibe `valor` na coluna da linha; portanto usamos o
-        // subtotal histórico do OrderItem, nunca o preço atual de Produto.
-        return new ItemComprovanteRequest(
-                item.getNome(),
-                quantity,
-                formatCurrency(item.getSubtotalCalculado())
-        );
+    private static String contato(Estabelecimento estabelecimento) {
+        return Stream.of(estabelecimento.telefone(), estabelecimento.email())
+                .filter(ComprovanteCompraRequest::notBlank)
+                .reduce((left, right) -> left + " - " + right)
+                .orElse(null);
     }
 
     static String formatCurrency(BigDecimal value) {
@@ -151,7 +154,7 @@ public record ComprovanteCompraRequest(
                 .replace('\u202F', ' ');
     }
 
-    private static String formatAddress(Endereco address) {
+    static String formatAddress(Endereco address) {
         String street = Stream.of(address.getRua(), address.getNumero())
                 .filter(ComprovanteCompraRequest::notBlank)
                 .map(String::trim)
@@ -166,7 +169,7 @@ public record ComprovanteCompraRequest(
         return formatted;
     }
 
-    private static String formatLocation(Condominio condominio, Endereco address) {
+    static String formatLocation(Condominio condominio, Endereco address) {
         require(notBlank(condominio.getNome()), "Condomínio sem nome");
         require(notBlank(address.getCidade()), "Endereço do condomínio sem cidade");
         require(notBlank(address.getEstado()), "Endereço do condomínio sem estado");
@@ -174,7 +177,7 @@ public record ComprovanteCompraRequest(
                 + address.getCidade().trim() + "/" + address.getEstado().trim().toUpperCase(PT_BR);
     }
 
-    private static String paymentLabel(PagamentoTipo type) {
+    static String paymentLabel(PagamentoTipo type) {
         return switch (Objects.requireNonNull(type)) {
             case PIX -> "PIX";
             case CREDIT_CARD -> "CRÉDITO";
@@ -199,20 +202,5 @@ public record ComprovanteCompraRequest(
                 "COMPROVANTE_INVALID_ORDER_DATA",
                 message
         );
-    }
-
-    private record ReceiptFields(
-            String empresa,
-            String cnpj,
-            String endereco,
-            String local,
-            String pedido,
-            String data,
-            String terminal,
-            String hora,
-            List<ItemComprovanteRequest> itens,
-            String total,
-            String pagamento
-    ) {
     }
 }

@@ -38,7 +38,7 @@ public class TerminalHttpAuthenticationFilter extends OncePerRequestFilter {
                 || path.equals("/order") || path.startsWith("/order/")
                 || path.startsWith("/pagamento/terminal/")
                 || path.equals("/checkout/carrinho") || path.equals("/checkout/qrcode")
-                || path.equals("/comprovante"));
+                || path.equals("/comprovante") || path.startsWith("/comprovante/"));
     }
 
     @Override

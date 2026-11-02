@@ -1,6 +1,7 @@
 package com.jefiro.app247.infra.controller;
 
 import com.jefiro.app247.domain.model.dto.appclient.AppClienteContracts.*;
+import com.jefiro.app247.domain.model.dto.comprovante.ComprovanteDigitalResponse;
 import com.jefiro.app247.domain.model.enum_type.ProdutoCategoria;
 import com.jefiro.app247.infra.service.AppClienteService;
 import jakarta.validation.Valid;
@@ -41,6 +42,11 @@ public class AppClienteController {
     @GetMapping(value = "/compras/{id}/comprovante", produces = MediaType.IMAGE_PNG_VALUE)
     public ResponseEntity<byte[]> comprovante(@PathVariable String id) {
         return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).cacheControl(CacheControl.noStore()).body(service.receipt(id));
+    }
+
+    @GetMapping("/compras/{id}/comprovante/dados")
+    public ResponseEntity<ComprovanteDigitalResponse> comprovanteDados(@PathVariable String id) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.receiptData(id));
     }
 
     @PostMapping("/compras/{id}/comprovante/envios")

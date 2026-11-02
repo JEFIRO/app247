@@ -58,11 +58,12 @@ class ComprovanteServiceTest {
                 "12/09/2026",
                 "TERM-001",
                 "15:40",
-                List.of(new ItemComprovanteRequest("Coca-Cola 350ml", 2, "R$ 11,98")),
+                List.of(new ItemComprovanteRequest("Coca-Cola 350ml", new java.math.BigDecimal("2"), "R$ 11,98", "R$ 5,99")),
                 "R$ 11,98",
                 "PIX",
                 "APROVADO",
-                ""
+                "",
+                null
         );
         lenient().when(redisTemplate.opsForValue()).thenReturn(values);
         service = new ComprovanteService(

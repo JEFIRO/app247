@@ -92,6 +92,8 @@ class ResidualHttpAuthorizationIntegrationTest {
         mvc.perform(post("/comprovante").contentType(MediaType.APPLICATION_JSON).content("""
                 {"terminalId":"a","pedidoId":"b","tipoEnvio":"EMAIL","destinatario":"a@example.com"}
                 """)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/comprovante/qualquer").param("terminalId", "a"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

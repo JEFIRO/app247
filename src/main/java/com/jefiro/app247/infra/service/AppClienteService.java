@@ -10,7 +10,9 @@ import com.jefiro.app247.domain.model.enum_type.ProdutoCategoria;
 import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
 import com.jefiro.app247.infra.exception.ApiBusinessException;
 import com.jefiro.app247.infra.repository.*;
+import com.jefiro.app247.infra.service.comprovante.ComprovanteDigitalService;
 import com.jefiro.app247.infra.service.comprovante.ComprovanteService;
+import com.jefiro.app247.domain.model.dto.comprovante.ComprovanteDigitalResponse;
 import com.jefiro.app247.domain.model.dto.comprovante.ComprovanteRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -58,6 +60,7 @@ public class AppClienteService {
     @Autowired private AppClientePreferenceRepository preferences;
     @Autowired private PurchaseSupportRepository supports;
     @Autowired private ComprovanteService comprovantes;
+    @Autowired private ComprovanteDigitalService comprovantesDigitais;
     @Autowired private StringRedisTemplate redis;
     @Autowired private CustomerIdentificationTokenRepository identificationTokens;
     @Value("${app.customer-link.ttl-seconds:120}") private long customerTokenTtlSeconds;
@@ -95,6 +98,11 @@ public class AppClienteService {
     @Transactional(readOnly=true)
     public byte[] receipt(String id){
         Order o=ownedOrder(id); requireApproved(o); return renderReceipt(o);
+    }
+
+    @Transactional(readOnly=true)
+    public ComprovanteDigitalResponse receiptData(String id){
+        Order o=ownedOrder(id); requireApproved(o); return comprovantesDigitais.montar(o);
     }
 
     @Transactional(readOnly=true)

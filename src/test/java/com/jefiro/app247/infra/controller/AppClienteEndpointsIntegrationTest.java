@@ -7,6 +7,7 @@ import com.jefiro.app247.domain.model.appclient.AppClienteConfig;
 import com.jefiro.app247.domain.model.appclient.LoyaltyAccount;
 import com.jefiro.app247.domain.model.appclient.Reward;
 import com.jefiro.app247.domain.model.appclient.RewardDiscountType;
+import com.jefiro.app247.domain.model.auth.Endereco;
 import com.jefiro.app247.domain.model.auth.RoleUser;
 import com.jefiro.app247.domain.model.auth.User;
 import com.jefiro.app247.domain.model.enum_type.*;
@@ -72,6 +73,8 @@ class AppClienteEndpointsIntegrationTest {
     @Autowired CarrinhoRepository carrinhos;
     @Autowired OrderRepository orders;
     @Autowired OrderItemRepository orderItems;
+    @Autowired EnderecoRepository enderecos;
+    @Autowired PagamentoRepository pagamentos;
     @Autowired LoyaltyAccountRepository accounts;
     @Autowired RewardRepository rewards;
     @Autowired CustomerCouponRepository coupons;
@@ -245,6 +248,62 @@ class AppClienteEndpointsIntegrationTest {
         orders.saveAndFlush(ownOrder);
 
         mvc.perform(get("/app-cliente/compras/{id}", orderId).header(HttpHeaders.AUTHORIZATION, authorization))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PURCHASE_NOT_FOUND"));
+    }
+
+    @Test
+    void dadosDoComprovanteDevolvemCompraAprovadaDoProprioCliente() throws Exception {
+        Endereco address = new Endereco();
+        address.setEmpresa(empresa);
+        address.setRua("Rua das Flores");
+        address.setNumero("123");
+        address.setBairro("Centro");
+        address.setCidade("Feira de Santana");
+        address.setEstado("BA");
+        address.setCep("44000-000");
+        condominio.setEndereco(enderecos.saveAndFlush(address));
+        condominios.saveAndFlush(condominio);
+        empresa.setLogoUrl("https://cdn.example.test/logo.png");
+        empresas.saveAndFlush(empresa);
+
+        PaymentAttempt payment = new PaymentAttempt();
+        payment.setOrder(orders.findById(orderId).orElseThrow());
+        payment.setEmpresa(empresa);
+        payment.setAttemptNumber(1);
+        payment.setTipo(PagamentoTipo.CREDIT_CARD);
+        payment.setStatus(PagamentoStatus.PROCESSED);
+        payment.setValor(new BigDecimal("8.000000"));
+        payment.setPaidAt(Instant.parse("2026-09-12T18:40:00Z"));
+        payment.setTransactionId("mp-777");
+        pagamentos.saveAndFlush(payment);
+
+        mvc.perform(get("/app-cliente/compras/{id}/comprovante/dados", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, authorization))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(jsonPath("$.estabelecimento.logoUrl").value("https://cdn.example.test/logo.png"))
+                .andExpect(jsonPath("$.numeroCompra").value(orderId))
+                .andExpect(jsonPath("$.hora").value("15:40"))
+                .andExpect(jsonPath("$.itens[0].descricao").value("Água"))
+                .andExpect(jsonPath("$.itens[0].valorUnitario").value(10.0))
+                .andExpect(jsonPath("$.itens[0].valorFinal").value(8.0))
+                .andExpect(jsonPath("$.descontos[0].tipo").value("PROMOCAO"))
+                .andExpect(jsonPath("$.total").value(8.0))
+                .andExpect(jsonPath("$.pagamento.transacaoId").value("mp-777"))
+                .andExpect(jsonPath("$.cliente.vinculado").value(true))
+                .andExpect(jsonPath("$.cliente.primeiroNome").value("Cliente"));
+    }
+
+    @Test
+    void dadosDoComprovanteDeOutraContaRetornam404Opaco() throws Exception {
+        User other = user(empresa, condominio, nextCpf(), java.util.UUID.randomUUID() + "@cliente.test", RoleUser.USER);
+        Order ownOrder = orders.findById(orderId).orElseThrow();
+        ownOrder.setUser(other);
+        orders.saveAndFlush(ownOrder);
+
+        mvc.perform(get("/app-cliente/compras/{id}/comprovante/dados", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, authorization))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PURCHASE_NOT_FOUND"));
     }

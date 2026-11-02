@@ -176,6 +176,21 @@ class TerminalOperationalSecurityIntegrationTest {
     }
 
     @Test
+    void dadosDoComprovanteExigemTerminalDaCredencialEDaOrder() throws Exception {
+        Order own = order(cart(terminalA));
+        Order other = order(cart(terminalA2));
+        mvc.perform(get("/comprovante/{id}", own.getIdOrder()).param("terminalId", terminalA.getIdTerminal())
+                        .header("X-Terminal-Token", credentialA))
+                .andExpect(status().isUnprocessableEntity());
+        mvc.perform(get("/comprovante/{id}", other.getIdOrder()).param("terminalId", terminalA2.getIdTerminal())
+                        .header("X-Terminal-Token", credentialA))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/comprovante/{id}", other.getIdOrder()).param("terminalId", terminalA.getIdTerminal())
+                        .header("X-Terminal-Token", credentialA))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void comprovanteNaoAceitaTerminalDoPayloadDiferente() throws Exception {
         mvc.perform(post("/comprovante").header("X-Terminal-Token", credentialA)
                         .contentType(MediaType.APPLICATION_JSON).content("""

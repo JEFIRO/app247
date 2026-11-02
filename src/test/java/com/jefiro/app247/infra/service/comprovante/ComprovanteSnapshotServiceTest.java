@@ -1,6 +1,7 @@
 package com.jefiro.app247.infra.service.comprovante;
 
 import com.jefiro.app247.domain.model.Order;
+import com.jefiro.app247.infra.repository.LoyaltyMovementRepository;
 import com.jefiro.app247.infra.service.OrderService;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +17,8 @@ class ComprovanteSnapshotServiceTest {
         Order invalidOrder = new Order();
         when(orderService.getOrderForTerminal("order-id", "terminal-id"))
                 .thenReturn(invalidOrder);
-        ComprovanteSnapshotService service = new ComprovanteSnapshotService(orderService);
+        ComprovanteSnapshotService service = new ComprovanteSnapshotService(
+                new ComprovanteDigitalService(orderService, mock(LoyaltyMovementRepository.class)));
 
         assertThatThrownBy(() -> service.montar("order-id", "terminal-id"))
                 .hasMessageContaining("pedido aprovado");
