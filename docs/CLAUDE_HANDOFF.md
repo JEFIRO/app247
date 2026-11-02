@@ -234,7 +234,7 @@ Pontos de atenção da API:
 - **App Cliente**: cadastro público por CPF (HMAC `IDENTITY_HASH_SECRET`), vínculo conta↔tenant por convite,
   claim de compras históricas, fidelidade `NONE|POINTS|CASHBACK`, recompensas, cupons com snapshot,
   QR opaco single-use de identificação no Terminal (V21) vinculando Carrinho→Order→fidelidade.
-- **Comprovante**: Spring monta snapshot e envia JSON ao FastAPI `comprovante-service`, que gera PNG e aciona n8n
+- **Comprovante**: Spring monta snapshot e envia JSON ao FastAPI `comprovante-service`, que gera PNG e envia por WhatsApp pela Evolution Go; comprovante por e-mail foi descontinuado. `evolution-go` e `evolution-postgres` estão no compose, exigem licença ativada no Manager e subida manual
   (`comprovante-compra.md`); idempotência em Redis.
 - **Recuperação de senha**: anti-enumeração, rate limit por IP/CPF, código/token com TTL e uso único
   (`security/password-recovery-security.md`).
@@ -250,7 +250,7 @@ Pontos de atenção da API:
 |---|---|---|
 | Mercado Pago OAuth + Orders Point + webhook | `OauthMercadoPagoService`, `MercadoPagoCobrancaService`, `MercadoPagoOrderQueryService`, `PaymentWorker`, `MercadoPagoWebhookSignatureService` | Validado com mocks/stub; **não verificável** contra MP real nesta auditoria. Refresh automático do token OAuth (`MercadoPagoTokenRefreshService`, 6 h, 30 dias antes de vencer) testado com HTTP simulado. |
 | PIX / Checkout Pro | — | **Ausente**: a classe `MercadoPagoService` citada em `contexto.md` não existe mais no código. |
-| FastAPI `comprovante-service` → n8n | `infra/service/comprovante/*` | Testes mockam `RestTemplate`; ponta a ponta **não validado**. |
+| FastAPI `comprovante-service` → Evolution Go | `infra/service/comprovante/*` | Testes mockam `RestTemplate`; ponta a ponta **não validado**. |
 | SMTP (JavaMail) | `EmailWorker` + fila Redis | Não verificável (sem SMTP real). |
 | Redis | filas, dedupe, rate limits, sessões | Desligado nos testes unitários; usado no E2E de 28/09 (não reexecutado). |
 | Terminal Python (outro repo) | HTTP + WebSocket com credencial individual | Contrato em `terminal-integration.md`; E2E de 28/09/2026 documentado em `e2e-terminal-backend.md` (não reexecutado aqui; doc cita "20 migrations", hoje são 22). |
@@ -277,7 +277,7 @@ Pontos de atenção da API:
 | Estoque, transferências, inventário, importação | **Validado** | `EstoqueServiceTest`, `CentralStockTransferIntegrationTest`, `InventoryAndProductImportIntegrationTest` |
 | Telemetria / lifecycle Terminal | **Validado** (unit) | `Telemetry*Test`, `TerminalLifecycleServiceTest`, `TerminalPresenceServiceTest` |
 | App Cliente config/fidelidade/recompensas/cupons | **Validado** | `AdminAppClienteManagementIntegrationTest` (MySQL), `AppClienteEndpointsIntegrationTest` |
-| Comprovante Spring→FastAPI→n8n | **Parcial** — Spring validado com mock; ponta a ponta não verificado | `comprovante/*Test` |
+| Comprovante Spring→FastAPI→Evolution Go | **Parcial** — Spring validado com mock; ponta a ponta não verificado | `comprovante/*Test` |
 | Visualização vs envio de comprovante no mesmo snapshot | **Parcial** | `backend-pending.md` |
 | Ledger de pontos tipado/expiração | **Parcial** | `backend-pending.md` |
 | Consumo de cashback | **Ausente** | `backend-pending.md` |
@@ -307,7 +307,7 @@ git diff --check              → apenas linha em branco extra no fim de .env.ex
   (`DatabaseBaselineMySqlTest`, `AdminAppClienteManagementIntegrationTest`, `PasswordRecoverySecurityIntegrationTest`).
   Sem Docker essas são **ignoradas** (`disabledWithoutDocker = true`), não aprovadas.
 - Não executados nesta auditoria: `scripts/e2e-terminal-backend.sh` (depende do repositório Terminal Python),
-  Redis real, SMTP, Mercado Pago real, FastAPI/n8n.
+  Redis real, SMTP, Mercado Pago real, FastAPI/Evolution Go.
 - Segunda execução com Redis inacessível (`-Dspring.data.redis.port=1`), simulando o runner do GitHub sem Redis:
   EXIT=0, 0 falhas. Contou 427 testes porque incluía `UserServiceTest.java`, um esqueleto da IDE com 12 `@Test`
   vazios (retirado do Git, mantido local). Testes reais: 415.

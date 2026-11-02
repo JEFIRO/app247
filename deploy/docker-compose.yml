@@ -81,8 +81,9 @@ services:
       - "127.0.0.1:8000:8000"
 
     environment:
-      N8N_COMPROVANTE_WEBHOOK_URL: "${N8N_COMPROVANTE_WEBHOOK_URL}"
-      N8N_COMPROVANTE_TIMEOUT_SECONDS: "${N8N_COMPROVANTE_TIMEOUT_SECONDS:-30}"
+      EVOLUTION_API_URL: "${EVOLUTION_API_URL:-http://evolution-go:4000}"
+      EVOLUTION_API_KEY: "${EVOLUTION_API_KEY:-}"
+      EVOLUTION_TIMEOUT_SECONDS: "${EVOLUTION_TIMEOUT_SECONDS:-30}"
       COMPROVANTE_LOGO_PATH: "${COMPROVANTE_LOGO_PATH:-/app/logo.png}"
       COMPROVANTE_LOGO_HOSTS: "${COMPROVANTE_LOGO_HOSTS:-}"
       COMPROVANTE_INTERNAL_TOKEN: "${COMPROVANTE_INTERNAL_TOKEN:?COMPROVANTE_INTERNAL_TOKEN obrigatorio}"
@@ -121,6 +122,86 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # WhatsApp dos comprovantes. Sem dependência do app: se cair, só o envio falha.
+  # Os segredos ficam com padrão vazio porque o deploy valida este arquivo inteiro com o
+  # .env do servidor; sem configurar, só estes dois serviços deixam de subir.
+  evolution-go:
+    image: evoapicloud/evolution-go:0.7.2
+    container_name: evolution-go
+    init: true
+    restart: unless-stopped
+    depends_on:
+      evolution-postgres:
+        condition: service_healthy
+    # Manager, licença e QR Code: só localhost, acesso via túnel SSH.
+    ports:
+      - "127.0.0.1:4000:4000"
+    environment:
+      SERVER_PORT: 4000
+      CLIENT_NAME: app247
+      GLOBAL_API_KEY: "${EVOLUTION_GLOBAL_API_KEY:-}"
+      EVOLUTION_OPERATOR_EMAIL: "${EVOLUTION_OPERATOR_EMAIL:-}"
+      POSTGRES_AUTH_DB: "postgresql://postgres:${EVOLUTION_POSTGRES_PASSWORD:-}@evolution-postgres:5432/evogo_auth?sslmode=disable"
+      POSTGRES_USERS_DB: "postgresql://postgres:${EVOLUTION_POSTGRES_PASSWORD:-}@evolution-postgres:5432/evogo_users?sslmode=disable"
+      DATABASE_SAVE_MESSAGES: "false"
+      CONNECT_ON_STARTUP: "true"
+      WADEBUG: INFO
+      LOGTYPE: console
+      OS_NAME: Linux
+      MINIO_ENABLED: "false"
+      EVENT_IGNORE_GROUP: "true"
+      EVENT_IGNORE_STATUS: "true"
+    volumes:
+      - evolution_data:/app/dbdata
+      - evolution_logs:/app/logs
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:4000/server/ok" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    mem_limit: 1g
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  evolution-postgres:
+    image: postgres:15-alpine
+    container_name: evolution-postgres
+    restart: unless-stopped
+    # O workflow só envia este arquivo e nginx/: o segundo banco é criado aqui, na primeira carga.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        echo 'CREATE DATABASE evogo_users;' > /docker-entrypoint-initdb.d/evogo-users.sql
+        exec docker-entrypoint.sh postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "${EVOLUTION_POSTGRES_PASSWORD:-}"
+      POSTGRES_DB: evogo_auth
+    volumes:
+      - evolution_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d evogo_users" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    mem_limit: 512m
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
   nginx:
     image: nginx:1.27-alpine
     container_name: app247-nginx
@@ -192,3 +273,6 @@ services:
 volumes:
   mysql_data_v2:
   redis_data:
+  evolution_data:
+  evolution_logs:
+  evolution_postgres_data:
