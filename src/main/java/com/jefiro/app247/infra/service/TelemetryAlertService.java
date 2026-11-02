@@ -6,6 +6,7 @@ import com.jefiro.app247.domain.model.enum_type.TelemetryAlertType;
 import com.jefiro.app247.domain.model.terminal.Terminal;
 import com.jefiro.app247.infra.repository.TerminalTelemetryAlertRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Map;
@@ -28,6 +29,7 @@ public class TelemetryAlertService {
         }
     }
 
+    @Transactional
     public void reconcileOffline(Terminal terminal, boolean offline, Instant now) {
         var active = repository.findByTerminalIdTerminalAndTypeAndStatus(
                         terminal.getIdTerminal(), TelemetryAlertType.TERMINAL_OFFLINE,

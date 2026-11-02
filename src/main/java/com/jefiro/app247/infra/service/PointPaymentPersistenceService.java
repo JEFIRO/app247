@@ -90,7 +90,7 @@ public class PointPaymentPersistenceService {
                     "Carrinho não pertence ao Terminal autenticado");
         }
         String empresaId = carrinho.getEmpresa().getId();
-        empresaService.getEmpresaOperacionalForUpdate(empresaId);
+        empresaService.getEmpresaOperacionalForShare(empresaId);
         configurationService.requireConfigured(carrinho.getTerminal(), empresaId);
 
         String terminalId = carrinho.getIdTerminal();

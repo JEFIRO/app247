@@ -13,4 +13,9 @@ public interface EmpresaRepository extends JpaRepository<Empresa,String> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select e from Empresa e where e.id=:id")
     Optional<Empresa> findByIdForUpdate(@Param("id") String id);
+
+    /** Cobranças convivem entre si, mas excluem quem encerra a Empresa ou desvincula a conta. */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select e from Empresa e where e.id=:id")
+    Optional<Empresa> findByIdForShare(@Param("id") String id);
 }

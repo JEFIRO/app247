@@ -40,8 +40,8 @@ public class EmpresaService {
     }
 
     @Transactional
-    public Empresa getEmpresaOperacionalForUpdate(String empresaId) {
-        Empresa empresa = repository.findByIdForUpdate(empresaId)
+    public Empresa getEmpresaOperacionalForShare(String empresaId) {
+        Empresa empresa = repository.findByIdForShare(empresaId)
                 .orElseThrow(() -> new ApiBusinessException(
                         HttpStatus.NOT_FOUND, "COMPANY_NOT_FOUND", "Empresa não encontrada"));
         if (!Boolean.TRUE.equals(empresa.getAtivo()) || empresa.isDefinitivamenteEncerrada()) {
