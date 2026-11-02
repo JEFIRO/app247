@@ -83,14 +83,16 @@ public class SecurityConfig {
                                 case "COMPANY_NOT_FOUND" -> "Empresa do token não está disponível";
                                 case "USER_DISABLED" -> "Usuário desativado";
                                 case "TERMINAL_AUTH_INVALID" -> "Credencial do Terminal inválida";
+                                case "TERMINAL_AUTH_UNAVAILABLE" -> "Autenticação do Terminal temporariamente indisponível";
                                 case "TOKEN_INVALID" -> "Token inválido ou expirado";
                                 case "AUTH_REQUIRED" -> "Autenticação obrigatória";
                                 default -> "Acesso negado";
                             };
-                            HttpStatus status = code.equals("TERMINAL_AUTH_INVALID")
-                                    || code.equals("TOKEN_INVALID")
-                                    || code.equals("AUTH_REQUIRED")
-                                    ? HttpStatus.UNAUTHORIZED : HttpStatus.FORBIDDEN;
+                            HttpStatus status = switch (code) {
+                                case "TERMINAL_AUTH_INVALID", "TOKEN_INVALID", "AUTH_REQUIRED" -> HttpStatus.UNAUTHORIZED;
+                                case "TERMINAL_AUTH_UNAVAILABLE" -> HttpStatus.SERVICE_UNAVAILABLE;
+                                default -> HttpStatus.FORBIDDEN;
+                            };
                             response.setStatus(status.value());
                             response.setCharacterEncoding(java.nio.charset.StandardCharsets.UTF_8.name());
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
