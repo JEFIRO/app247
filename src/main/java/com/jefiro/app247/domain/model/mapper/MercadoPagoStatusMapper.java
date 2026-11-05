@@ -39,7 +39,8 @@ public final class MercadoPagoStatusMapper {
         return switch (type) {
             case "credit_card" -> PagamentoTipo.CREDIT_CARD;
             case "debit_card" -> PagamentoTipo.DEBIT_CARD;
-            case "qr" -> PagamentoTipo.PIX;
+            // A Point informa PIX como {"id": "pix", "type": "bank_transfer"}.
+            case "qr", "bank_transfer" -> PagamentoTipo.PIX;
             case "voucher_card" -> PagamentoTipo.ALIMENT_CARD;
             default -> null;
         };

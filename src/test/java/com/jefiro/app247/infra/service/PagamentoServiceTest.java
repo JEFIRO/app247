@@ -108,6 +108,17 @@ class PagamentoServiceTest {
     }
 
     @Test
+    void pixNaPointChegaComoBankTransfer() throws Exception {
+        // Formato real do webhook order.processed de PIX na Point (04/11/2026).
+        process("processed", "accredited", "bank_transfer", "pix", 1, true);
+
+        assertThat(pagamento.getStatus()).isEqualTo(PagamentoStatus.PROCESSED);
+        assertThat(pagamento.getTipo()).isEqualTo(PagamentoTipo.PIX);
+        assertThat(pagamento.getPaymentMethodId()).isEqualTo(PaymentMethodId.PIX);
+        assertThat(pagamento.getInstallments()).isEqualTo(1);
+    }
+
+    @Test
     void cartaoRecusadoUsaStatusFailedEDetalheDaRecusa() throws Exception {
         when(pagamentoRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         when(orderService.save(any())).thenAnswer(call -> call.getArgument(0));

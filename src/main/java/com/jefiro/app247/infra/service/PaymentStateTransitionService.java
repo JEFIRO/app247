@@ -120,6 +120,11 @@ public class PaymentStateTransitionService {
                     PagamentoTipo tipo = MercadoPagoStatusMapper.toPagamentoTipo(data.paymentMethodType());
                     pagamento.setPaymentMethodId(PaymentMethodId.findByValue(data.paymentMethodId()));
                     pagamento.setTipo(tipo);
+                    if (tipo == null) {
+                        // Sem tipo o comprovante é recusado; o log mostra o formato novo do Mercado Pago.
+                        log.warn("Meio de pagamento não mapeado: orderId={}, type={}, id={}",
+                                order.getIdOrder(), data.paymentMethodType(), data.paymentMethodId());
+                    }
                     if (data.installments() != null) pagamento.setInstallments(data.installments());
                     else if (tipo != null && tipo != PagamentoTipo.CREDIT_CARD) pagamento.setInstallments(1);
                 }

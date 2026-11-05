@@ -43,6 +43,10 @@ public enum PaymentMethodId {
         if (value == null) {
             return null;
         }
+        // PIX pela Point chega com id "pix"; "account_money" segue valendo para QR.
+        if (value.equalsIgnoreCase("pix")) {
+            return PIX;
+        }
         for (PaymentMethodId method : values()) {
             if (method.value.equalsIgnoreCase(value)) {
                 return method;

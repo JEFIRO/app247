@@ -1,6 +1,8 @@
 package com.jefiro.app247.infra.service;
 
 import com.jefiro.app247.domain.model.enum_type.PagamentoStatus;
+import com.jefiro.app247.domain.model.enum_type.PagamentoTipo;
+import com.jefiro.app247.domain.model.enum_type.PaymentMethodId;
 import com.jefiro.app247.domain.model.enum_type.TerminalPaymentStatus;
 import com.jefiro.app247.domain.model.enum_type.order.OrderStatus;
 import com.jefiro.app247.domain.model.mapper.MercadoPagoStatusMapper;
@@ -29,5 +31,23 @@ class MercadoPagoStatusMapperTest {
     ) {
         assertThat(MercadoPagoStatusMapper.toPagamentoStatus(orderStatus)).isEqualTo(pagamentoStatus);
         assertThat(MercadoPagoStatusMapper.toTerminalStatus(orderStatus)).isEqualTo(terminalStatus);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "credit_card,CREDIT_CARD",
+            "debit_card,DEBIT_CARD",
+            "qr,PIX",
+            "bank_transfer,PIX",
+            "voucher_card,ALIMENT_CARD"
+    })
+    void mapeiaTipoDoMeioDePagamento(String type, PagamentoTipo tipo) {
+        assertThat(MercadoPagoStatusMapper.toPagamentoTipo(type)).isEqualTo(tipo);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"pix,PIX", "account_money,PIX", "master,MASTER", "debvisa,DEBVISA"})
+    void reconheceIdDoMeioDePagamento(String id, PaymentMethodId method) {
+        assertThat(PaymentMethodId.findByValue(id)).isEqualTo(method);
     }
 }
