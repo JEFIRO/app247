@@ -127,7 +127,9 @@ services:
   # Os segredos ficam com padrão vazio porque o deploy valida este arquivo inteiro com o
   # .env do servidor; sem configurar, só estes dois serviços deixam de subir.
   evolution-go:
-    image: evoapicloud/evolution-go:0.7.2
+    # A 0.7.2 oficial recebe "Client outdated (405)" desde 02/11/2026. Em produção,
+    # EVOLUTION_GO_IMAGE=evolution-go:0.7.2-fix405 (0.7.2 + PR #227, compilada na VM).
+    image: ${EVOLUTION_GO_IMAGE:-evoapicloud/evolution-go:0.7.2}
     container_name: evolution-go
     init: true
     restart: unless-stopped
