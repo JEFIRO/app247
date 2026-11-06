@@ -8,6 +8,7 @@ import com.jefiro.app247.infra.exception.ExternalServiceException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientResponseException;
 
 @Service
 public class PointPaymentRefundService {
@@ -41,11 +42,37 @@ public class PointPaymentRefundService {
         try {
             MercadoPagoRefundResponse remote = mercadoPago.refundRemoteOrder(order);
             transitions.apply(MercadoPagoOrderState.fromRefund(remote, order.getPagamento()));
-        } catch (ExternalServiceException uncertain) {
+        } catch (ExternalServiceException failure) {
             log.warn("[PAYMENT-REFUND] resposta não confirmada; reconciliando orderId={} failureType={}",
-                    orderId, uncertain.getFailureType());
-            if (!reconciliation.reconcileRefund(orderId, "REFUND_REQUEST")) throw uncertain;
+                    orderId, failure.getFailureType());
+            if (!reconcileQuietly(orderId) && !isUncertain(failure)) throw failure;
+            // Incerto: a intenção já está persistida; webhook e agendador confirmam depois.
         }
         return AdminRefundResponse.from(orders.getOrderForReconciliation(orderId));
+    }
+
+    private boolean reconcileQuietly(String orderId) {
+        try {
+            return reconciliation.reconcileRefund(orderId, "REFUND_REQUEST");
+        } catch (RuntimeException error) {
+            log.warn("[PAYMENT-REFUND] reconciliação imediata falhou orderId={} errorType={}",
+                    orderId, error.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    /**
+     * Falhas em que o Mercado Pago pode ter aceitado o reembolso. HTTP 409 aparece quando o
+     * reembolso já está em processamento; recusas definitivas (401, 403, 400, 422) continuam erro.
+     */
+    static boolean isUncertain(ExternalServiceException failure) {
+        if (failure.getCause() instanceof RestClientResponseException response
+                && response.getStatusCode().value() == 409) {
+            return true;
+        }
+        return switch (failure.getFailureType()) {
+            case TIMEOUT, UNAVAILABLE, UNKNOWN, IDEMPOTENCY_CONFLICT -> true;
+            default -> false;
+        };
     }
 }
