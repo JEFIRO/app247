@@ -63,7 +63,10 @@ public class AdminSalesQueryService {
         OrderStatus parsedStatus = orderStatus(status);
         return orderRepository.findAdminSales(
                 EmpresaContext.require(), range.from(), range.to(), blank(condominioId), blank(terminalId),
-                parsedStatus, parsedStatus == OrderStatus.PROCESSED, sanitize(pageable));
+                parsedStatus,
+                // Vendas pagas (inclusive as reembolsadas) contam pela data do pagamento.
+                parsedStatus == OrderStatus.PROCESSED || parsedStatus == OrderStatus.REFUNDED,
+                sanitize(pageable));
     }
 
     private OrderStatus orderStatus(String value) {

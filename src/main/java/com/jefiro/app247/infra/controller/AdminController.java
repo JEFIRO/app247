@@ -7,6 +7,12 @@ import com.jefiro.app247.infra.service.admin.AdminDashboardService;
 import com.jefiro.app247.infra.service.admin.AdminOnboardingService;
 import com.jefiro.app247.infra.service.admin.AdminPaymentQueryService;
 import com.jefiro.app247.infra.service.admin.AdminSalesQueryService;
+import com.jefiro.app247.infra.service.admin.AdminSaleDetailService;
+import com.jefiro.app247.domain.model.dto.admin.AdminSaleDetailResponse;
+import com.jefiro.app247.domain.model.dto.admin.AdminSendReceiptRequest;
+import com.jefiro.app247.infra.service.comprovante.ComprovanteEnvioResponse;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.RequestBody;
 import com.jefiro.app247.infra.service.admin.AdminTerminalQueryService;
 import com.jefiro.app247.infra.service.PointPaymentRefundService;
 import com.jefiro.app247.domain.model.dto.admin.AdminRefundResponse;
@@ -46,6 +52,8 @@ public class AdminController {
     private AdminActivityQueryService activityService;
     @Autowired
     private PointPaymentRefundService refundService;
+    @Autowired
+    private AdminSaleDetailService saleDetailService;
 
     @GetMapping("/dashboard")
     public ResponseEntity<?> dashboard() {
@@ -126,6 +134,27 @@ public class AdminController {
             Pageable pageable) {
         return ResponseEntity.ok(salesService.list(
                 period, from, to, condominioId, terminalId, status, pageable));
+    }
+
+    @GetMapping("/sales/{orderId}")
+    @Operation(summary = "Detalhe de uma venda da empresa: itens, pagamento e reembolso",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<AdminSaleDetailResponse> saleDetail(@PathVariable String orderId) {
+        return ResponseEntity.ok(saleDetailService.detail(orderId));
+    }
+
+    @PostMapping("/sales/{orderId}/comprovante")
+    @Operation(summary = "Envia o comprovante de uma venda aprovada por WhatsApp ou e-mail",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Envio aceito ou já processado"),
+            @ApiResponse(responseCode = "400", description = "Destinatário inválido"),
+            @ApiResponse(responseCode = "404", description = "PURCHASE_NOT_FOUND"),
+            @ApiResponse(responseCode = "422", description = "Venda não aprovada")
+    })
+    public ResponseEntity<ComprovanteEnvioResponse> sendReceipt(
+            @PathVariable String orderId, @Valid @RequestBody AdminSendReceiptRequest request) {
+        return ResponseEntity.ok(saleDetailService.sendReceipt(orderId, request));
     }
 
     @GetMapping("/activity")

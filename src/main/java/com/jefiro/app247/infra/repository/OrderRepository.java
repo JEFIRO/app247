@@ -142,6 +142,11 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     @Query("select o from Order o where o.idOrder = :orderId")
     Optional<Order> findByIdForUpdate(@Param("orderId") String orderId);
 
+    @EntityGraph(attributePaths = {"empresa", "condominio", "terminal", "paymentAttempts"})
+    @Query("select o from Order o where o.idOrder = :orderId and o.empresa.id = :empresaId")
+    Optional<Order> findAdminSaleDetail(@Param("orderId") String orderId,
+                                        @Param("empresaId") String empresaId);
+
     @EntityGraph(attributePaths = {
             "empresa", "paymentAttempts", "carrinho", "carrinho.terminal",
             "carrinho.terminal.condominio", "carrinho.terminal.condominio.empresa"

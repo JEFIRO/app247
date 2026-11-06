@@ -177,7 +177,7 @@ public record ComprovanteCompraRequest(
                 + address.getCidade().trim() + "/" + address.getEstado().trim().toUpperCase(PT_BR);
     }
 
-    static String paymentLabel(PagamentoTipo type) {
+    public static String paymentLabel(PagamentoTipo type) {
         return switch (Objects.requireNonNull(type)) {
             case PIX -> "PIX";
             case CREDIT_CARD -> "CRÉDITO";
