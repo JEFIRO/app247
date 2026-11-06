@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class EmpresaService {
@@ -30,6 +31,8 @@ public class EmpresaService {
     UserRepository userRepository;
     @Autowired
     AuditLogService auditLogService;
+    @Autowired
+    ObjectStorageService objectStorageService;
 
     public Empresa newEmpresa(Empresa empresa) {
         return repository.save(empresa);
@@ -107,13 +110,50 @@ public class EmpresaService {
     @Transactional
     public EmpresaBrandingResponse atualizarBranding(EmpresaBrandingRequest request) {
         Empresa empresa = getEmpresa(EmpresaContext.require());
+        String logoAnterior = empresa.getLogoUrl();
+        String logoDarkAnterior = empresa.getLogoDarkUrl();
         empresa.setNomeExibicao(request.nomeExibicao().trim());
         empresa.setLogoUrl(normalizarUrl(request.logoUrl()));
         empresa.setLogoDarkUrl(normalizarUrl(request.logoDarkUrl()));
+        apagarSeSubstituido(logoAnterior, empresa.getLogoUrl());
+        apagarSeSubstituido(logoDarkAnterior, empresa.getLogoDarkUrl());
         empresa.setCorPrincipal(request.corPrincipal().toUpperCase());
         empresa.setCorSecundaria(request.corSecundaria().toUpperCase());
         empresa.setCorDestaque(request.corDestaque().toUpperCase());
         return EmpresaBrandingResponse.from(repository.save(empresa));
+    }
+
+    /**
+     * Envia o logo da Empresa do contexto para o Object Storage e grava a URL pública.
+     * O arquivo anterior do bucket é apagado só depois do commit.
+     *
+     * @param escuro {@code true} para a versão usada sobre fundo escuro
+     */
+    @Transactional
+    public EmpresaBrandingResponse enviarLogo(MultipartFile file, boolean escuro) {
+        Empresa empresa = getEmpresa(EmpresaContext.require());
+        String anterior = escuro ? empresa.getLogoDarkUrl() : empresa.getLogoUrl();
+        String url = objectStorageService.uploadImage(file, "empresas/" + empresa.getId() + "/logo");
+        if (escuro) empresa.setLogoDarkUrl(url);
+        else empresa.setLogoUrl(url);
+        Empresa salva = repository.save(empresa);
+        objectStorageService.deleteAfterCommit(anterior);
+        return EmpresaBrandingResponse.from(salva);
+    }
+
+    @Transactional
+    public EmpresaBrandingResponse removerLogo(boolean escuro) {
+        Empresa empresa = getEmpresa(EmpresaContext.require());
+        String anterior = escuro ? empresa.getLogoDarkUrl() : empresa.getLogoUrl();
+        if (escuro) empresa.setLogoDarkUrl(null);
+        else empresa.setLogoUrl(null);
+        Empresa salva = repository.save(empresa);
+        objectStorageService.deleteAfterCommit(anterior);
+        return EmpresaBrandingResponse.from(salva);
+    }
+
+    private void apagarSeSubstituido(String anterior, String atual) {
+        if (anterior != null && !anterior.equals(atual)) objectStorageService.deleteAfterCommit(anterior);
     }
 
     private String normalizarUrl(String value) {

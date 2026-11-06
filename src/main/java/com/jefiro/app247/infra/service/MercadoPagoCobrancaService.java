@@ -126,13 +126,17 @@ public class MercadoPagoCobrancaService {
                 throw new IllegalStateException("Reembolso retornou outra Order Mercado Pago");
             }
             if (!"refunded".equalsIgnoreCase(body.status())) {
-                throw new IllegalStateException("Mercado Pago não confirmou o reembolso");
+                // Reembolso aceito mas ainda em processamento: confirmação vem por webhook/reconciliação.
+                throw new ExternalServiceException("Mercado Pago", ExternalFailureType.UNKNOWN,
+                        "Mercado Pago ainda não confirmou o reembolso (status=" + body.status() + ")", null);
             }
             return body;
         } catch (RestClientResponseException e) {
             ExternalFailureType failureType = classify(e);
-            log.warn("Reembolso Point não confirmado: orderId={}, httpStatus={}, failureType={}",
-                    order.getIdOrder(), e.getStatusCode().value(), failureType);
+            String responseBody = e.getResponseBodyAsString();
+            log.warn("Reembolso Point não confirmado: orderId={}, httpStatus={}, failureType={}, body={}",
+                    order.getIdOrder(), e.getStatusCode().value(), failureType,
+                    responseBody.length() > 500 ? responseBody.substring(0, 500) : responseBody);
             throw new ExternalServiceException("Mercado Pago", failureType,
                     "Reembolso recusado com HTTP " + e.getStatusCode().value(), e);
         } catch (ResourceAccessException e) {
