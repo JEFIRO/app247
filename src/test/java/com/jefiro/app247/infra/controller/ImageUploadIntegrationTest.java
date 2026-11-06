@@ -25,6 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Upload de imagem vai para o Object Storage; o servidor não serve mais arquivos locais. */
@@ -53,6 +54,39 @@ class ImageUploadIntegrationTest {
 
         assertThat(users.findById(user.getIdUser()).orElseThrow().getFotoPerfil()).isEqualTo(nova);
         verify(storage).deleteAfterCommit(BASE + "usuarios/antiga.jpg");
+    }
+
+    @Test
+    void logoDaEmpresaVaiParaOBucketEApareceNoBranding() throws Exception {
+        User user = user(null);
+        String url = BASE + "empresas/" + user.getEmpresa().getId() + "/logo/novo.png";
+        when(storage.uploadImage(any(), eq("empresas/" + user.getEmpresa().getId() + "/logo"))).thenReturn(url);
+        String token = "Bearer " + tokens.generateToken(user);
+
+        mvc.perform(multipart("/empresas/me/branding/logo")
+                        .file(new MockMultipartFile("file", "logo.png", "image/png", new byte[]{1}))
+                        .header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.logoUrl").value(url));
+
+        assertThat(empresas.findById(user.getEmpresa().getId()).orElseThrow().getLogoUrl()).isEqualTo(url);
+
+        mvc.perform(multipart("/empresas/me/branding/logo")
+                        .file(new MockMultipartFile("file", "logo.png", "image/png", new byte[]{1}))
+                        .param("variante", "roxo")
+                        .header("Authorization", token))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void clienteNaoEnviaLogoDaEmpresa() throws Exception {
+        User user = user(null);
+        user.setRole(RoleUser.USER);
+        users.saveAndFlush(user);
+        mvc.perform(multipart("/empresas/me/branding/logo")
+                        .file(new MockMultipartFile("file", "logo.png", "image/png", new byte[]{1}))
+                        .header("Authorization", "Bearer " + tokens.generateToken(user)))
+                .andExpect(status().isForbidden());
     }
 
     @Test
