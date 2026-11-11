@@ -9,7 +9,11 @@ public record AdminStockSummaryResponse(
         return new AdminStockSummaryResponse(
                 false,
                 null,
-                "Defina um estoque mínimo por local para habilitar este indicador"
+                "Defina o estoque mínimo no cadastro dos produtos para habilitar este indicador"
         );
+    }
+
+    public static AdminStockSummaryResponse abaixoDoMinimo(long produtos) {
+        return new AdminStockSummaryResponse(true, produtos, null);
     }
 }

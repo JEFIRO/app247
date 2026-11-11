@@ -153,6 +153,12 @@ public class ProdutoService {
             produto.setPesoTolerancia(dto.pesoTolerancia());
         }
         if (dto.ativo() != null) produto.setStatus(dto.ativo());
+        if (dto.estoqueMinimoCentral() != null) {
+            produto.setEstoqueMinimoCentral(Produto.minimoOuNull(dto.estoqueMinimoCentral()));
+        }
+        if (dto.estoqueMinimoCondominio() != null) {
+            produto.setEstoqueMinimoCondominio(Produto.minimoOuNull(dto.estoqueMinimoCondominio()));
+        }
 
         // =========================
         // IMAGEM
@@ -190,6 +196,23 @@ public class ProdutoService {
                 ? ProdutoCatalogChangeReason.PRODUCT_ACTIVATED
                 : ProdutoCatalogChangeReason.PRODUCT_DEACTIVATED, condominios);
         return salvo;
+    }
+
+    /** Só grava a marcação; a associação aos Condomínios é feita pelo EstoqueService. */
+    @Transactional
+    public Produto definirDisponivelEmTodosCondominios(String id, boolean ativo) {
+        Produto produto = buscarPorIdDoTenant(id, EmpresaContext.require());
+        if (produto.isDisponivelTodosCondominios() == ativo) return produto;
+        produto.setDisponivelTodosCondominios(ativo);
+        Produto salvo = produtoRepository.saveAndFlush(produto);
+        auditLogService.record(salvo.getEmpresa(), "PRODUCT_ALL_CONDOMINIUMS_CHANGED",
+                "Produto", salvo.getIdProduto(), null,
+                java.util.Map.of("disponivelTodosCondominios", ativo), java.util.Map.of());
+        return salvo;
+    }
+
+    public List<Produto> disponiveisEmTodosCondominios(String empresaId) {
+        return produtoRepository.findAllByEmpresaIdAndDisponivelTodosCondominiosTrue(empresaId);
     }
 
     public Page<Produto> listar(Pageable pageable) {

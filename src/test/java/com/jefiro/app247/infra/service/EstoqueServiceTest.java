@@ -124,6 +124,70 @@ class EstoqueServiceTest {
     }
 
     @Test
+    void disponivelEmTodosAssociaSoOsCondominiosQueFaltam() {
+        EmpresaContext.set("empresa-a");
+        Fixture f = fixture("3.000");
+        f.estoque.setAtivo(true);
+        Condominio jaAssociado = f.estoque.getCondominio();
+        Condominio novo = new Condominio();
+        novo.setIdCondominio("cond-b");
+        novo.setEmpresa(jaAssociado.getEmpresa());
+        Produto produto = f.estoque.getProduto();
+        when(produtoService.definirDisponivelEmTodosCondominios("prod-a", true)).thenReturn(produto);
+        when(condominioService.listarAtivosDoTenant("empresa-a")).thenReturn(List.of(jaAssociado, novo));
+        when(estoqueRepository.findByCondominioIdCondominioAndProdutoIdProduto("cond-a", "prod-a"))
+                .thenReturn(Optional.of(f.estoque));
+        when(estoqueRepository.findByCondominioIdCondominioAndProdutoIdProduto("cond-b", "prod-a"))
+                .thenReturn(Optional.empty());
+        when(estoqueRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.definirDisponivelEmTodos("prod-a", true);
+
+        ArgumentCaptor<EstoqueCondominio> criado = ArgumentCaptor.forClass(EstoqueCondominio.class);
+        verify(estoqueRepository).saveAndFlush(criado.capture());
+        assertEquals("cond-b", criado.getValue().getCondominio().getIdCondominio());
+        assertEquals(0, criado.getValue().getQuantidade().signum());
+        assertTrue(criado.getValue().getAtivo());
+        assertEquals(new BigDecimal("3.000"), f.estoque.getQuantidade());
+        ArgumentCaptor<ProdutoCatalogChangedEvent> evento =
+                ArgumentCaptor.forClass(ProdutoCatalogChangedEvent.class);
+        verify(eventPublisher).publishEvent(evento.capture());
+        assertEquals(Set.of("cond-b"), evento.getValue().condominiumIds());
+    }
+
+    @Test
+    void desmarcarDisponivelEmTodosMantemAssociacoes() {
+        EmpresaContext.set("empresa-a");
+        Fixture f = fixture("3.000");
+        when(produtoService.definirDisponivelEmTodosCondominios("prod-a", false))
+                .thenReturn(f.estoque.getProduto());
+
+        service.definirDisponivelEmTodos("prod-a", false);
+
+        verifyNoInteractions(estoqueRepository, condominioService, eventPublisher);
+    }
+
+    @Test
+    void condominioNovoRecebeProdutosMarcadosParaTodos() {
+        Fixture f = fixture("0.000");
+        Condominio novo = new Condominio();
+        novo.setIdCondominio("cond-novo");
+        novo.setEmpresa(f.estoque.getCondominio().getEmpresa());
+        when(produtoService.disponiveisEmTodosCondominios("empresa-a"))
+                .thenReturn(List.of(f.estoque.getProduto()));
+        when(estoqueRepository.findByCondominioIdCondominioAndProdutoIdProduto("cond-novo", "prod-a"))
+                .thenReturn(Optional.empty());
+        when(estoqueRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.aoCriarCondominio(new com.jefiro.app247.infra.event.CondominioCriadoEvent(novo));
+
+        ArgumentCaptor<EstoqueCondominio> criado = ArgumentCaptor.forClass(EstoqueCondominio.class);
+        verify(estoqueRepository).saveAndFlush(criado.capture());
+        assertEquals("cond-novo", criado.getValue().getCondominio().getIdCondominio());
+        assertEquals("prod-a", criado.getValue().getProduto().getIdProduto());
+    }
+
+    @Test
     void remocaoFazSoftDeleteENotificaCondominio() {
         EmpresaContext.set("empresa-a");
         Fixture f = fixture("-1.000");

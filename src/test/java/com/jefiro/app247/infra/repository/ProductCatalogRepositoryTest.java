@@ -22,6 +22,55 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ProductCatalogRepositoryTest {
     @Autowired EntityManager entityManager;
     @Autowired EstoqueCondominioRepository estoqueCondominioRepository;
+    @Autowired ProdutoRepository produtoRepository;
+
+    @Test
+    void semMinimoDefinidoARegraDeEstoqueBaixoNaoEstaConfigurada() {
+        Empresa empresa = empresa("F", "60606060000160", "catalog-f@teste.com");
+        produto(empresa, "F-001", "7894900011548");
+        entityManager.flush();
+
+        assertThat(produtoRepository.countComEstoqueMinimo(empresa.getId())).isZero();
+        assertThat(produtoRepository.countAbaixoDoEstoqueMinimo(empresa.getId())).isZero();
+    }
+
+    @Test
+    void contaProdutosAbaixoDoMinimoNoCentralOuEmAlgumCondominio() {
+        Empresa empresa = empresa("G", "70707070000170", "catalog-g@teste.com");
+        Empresa outra = empresa("H", "80808080000180", "catalog-h@teste.com");
+        Condominio condominio = condominio(empresa, "Residencial G", true);
+
+        // Central abaixo do mínimo.
+        Produto baixoNoCentral = produto(empresa, "G-001", "7894900011555");
+        baixoNoCentral.setEstoqueMinimoCentral(new BigDecimal("10.000"));
+        central(empresa, baixoNoCentral, "9.999");
+        // Central exatamente no mínimo não conta.
+        Produto noLimite = produto(empresa, "G-002", "7894900011562");
+        noLimite.setEstoqueMinimoCentral(new BigDecimal("10.000"));
+        central(empresa, noLimite, "10.000");
+        // Com mínimo no central e sem nenhuma entrada: saldo zero, conta.
+        Produto semEntrada = produto(empresa, "G-003", "7894900011579");
+        semEntrada.setEstoqueMinimoCentral(new BigDecimal("1.000"));
+        // Abaixo do mínimo no Condomínio.
+        Produto baixoNoCondominio = produto(empresa, "G-004", "7894900011586");
+        baixoNoCondominio.setEstoqueMinimoCondominio(new BigDecimal("5.000"));
+        noCondominio(empresa, condominio, baixoNoCondominio, "2.000", true);
+        // Associação inativa não conta.
+        Produto foraDeVenda = produto(empresa, "G-005", "7894900011593");
+        foraDeVenda.setEstoqueMinimoCondominio(new BigDecimal("5.000"));
+        noCondominio(empresa, condominio, foraDeVenda, "0.000", false);
+        // Produto inativo não conta.
+        Produto inativo = produto(empresa, "G-006", "7894900011609");
+        inativo.setEstoqueMinimoCentral(new BigDecimal("5.000"));
+        inativo.setAtivo(false);
+        // Outra Empresa não entra na contagem.
+        Produto deOutra = produto(outra, "H-001", "7894900011616");
+        deOutra.setEstoqueMinimoCentral(new BigDecimal("5.000"));
+        entityManager.flush();
+
+        assertThat(produtoRepository.countComEstoqueMinimo(empresa.getId())).isEqualTo(6);
+        assertThat(produtoRepository.countAbaixoDoEstoqueMinimo(empresa.getId())).isEqualTo(3);
+    }
 
     @Test
     void mesmoCodigoDeBarrasPodeExistirEmEmpresasDiferentes() {
@@ -102,6 +151,25 @@ class ProductCatalogRepositoryTest {
         if (codigo == null) produto.adicionarCodigoBarras(barcode, "EAN", true);
         entityManager.persist(produto);
         return produto;
+    }
+
+    private void central(Empresa empresa, Produto produto, String quantidade) {
+        var estoque = new com.jefiro.app247.domain.model.EstoqueEmpresa();
+        estoque.setEmpresa(empresa);
+        estoque.setProduto(produto);
+        estoque.setQuantidade(new BigDecimal(quantidade));
+        entityManager.persist(estoque);
+    }
+
+    private void noCondominio(Empresa empresa, Condominio condominio, Produto produto,
+                              String quantidade, boolean ativo) {
+        EstoqueCondominio estoque = new EstoqueCondominio();
+        estoque.setEmpresa(empresa);
+        estoque.setCondominio(condominio);
+        estoque.setProduto(produto);
+        estoque.setQuantidade(new BigDecimal(quantidade));
+        estoque.setAtivo(ativo);
+        entityManager.persist(estoque);
     }
 
     private Condominio condominio(Empresa empresa, String nome, boolean ativo) {

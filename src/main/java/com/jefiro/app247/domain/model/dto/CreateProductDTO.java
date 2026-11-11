@@ -52,9 +52,27 @@ public record CreateProductDTO(
 
         ProdutoFiscalRequest fiscal,
 
-        Boolean ativo
+        Boolean ativo,
+
+        // Zero limpa o mínimo; ausente (null) mantém o valor atual na edição.
+        @PositiveOrZero(message = "O estoque mínimo não pode ser negativo.")
+        @Digits(integer = 12, fraction = 3, message = "Estoque mínimo fora do limite permitido.")
+        BigDecimal estoqueMinimoCentral,
+
+        @PositiveOrZero(message = "O estoque mínimo não pode ser negativo.")
+        @Digits(integer = 12, fraction = 3, message = "Estoque mínimo fora do limite permitido.")
+        BigDecimal estoqueMinimoCondominio
 
 ) {
+    public CreateProductDTO(String codigo, String nome, BigDecimal preco, Integer quantidade,
+                            String unidadeMedida, String categoria, String descricao, String foto,
+                            BigDecimal peso, BigDecimal pesoTolerancia, String codigoInterno,
+                            List<CodigoBarrasRequest> codigosBarras, ProdutoFiscalRequest fiscal,
+                            Boolean ativo) {
+        this(codigo, nome, preco, quantidade, unidadeMedida, categoria, descricao, foto,
+                peso, pesoTolerancia, codigoInterno, codigosBarras, fiscal, ativo, null, null);
+    }
+
     public CreateProductDTO(String codigo, String nome, BigDecimal preco, Integer quantidade,
                             String unidadeMedida, String categoria, String descricao, String foto,
                             BigDecimal peso, BigDecimal pesoTolerancia) {

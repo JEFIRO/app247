@@ -50,6 +50,15 @@ public class Produto {
     private String foto;
     @Column(nullable = false)
     private boolean ativo = true;
+    /** Disponível em todos os Condomínios da Empresa, inclusive nos criados depois. */
+    @Column(name = "disponivel_todos_condominios", nullable = false)
+    private boolean disponivelTodosCondominios = false;
+    /** Abaixo deste saldo o estoque central está baixo; null = sem mínimo. */
+    @Column(name = "estoque_minimo_central", precision = 15, scale = 3)
+    private BigDecimal estoqueMinimoCentral;
+    /** Mesmo mínimo para o saldo de cada Condomínio; null = sem mínimo. */
+    @Column(name = "estoque_minimo_condominio", precision = 15, scale = 3)
+    private BigDecimal estoqueMinimoCondominio;
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
     @Column(name = "updated_at", nullable = false)
@@ -73,6 +82,25 @@ public class Produto {
         peso = dto.peso();
         pesoTolerancia = dto.pesoTolerancia();
         ativo = dto.ativo() == null || dto.ativo();
+        estoqueMinimoCentral = minimoOuNull(dto.estoqueMinimoCentral());
+        estoqueMinimoCondominio = minimoOuNull(dto.estoqueMinimoCondominio());
+    }
+
+    /** Zero (ou vazio) significa "sem mínimo" e é guardado como null. */
+    public static BigDecimal minimoOuNull(BigDecimal valor) {
+        return valor == null || valor.signum() <= 0 ? null : valor;
+    }
+
+    public boolean centralAbaixoDoMinimo(BigDecimal saldo) {
+        return abaixo(saldo, estoqueMinimoCentral);
+    }
+
+    public boolean condominioAbaixoDoMinimo(BigDecimal saldo) {
+        return abaixo(saldo, estoqueMinimoCondominio);
+    }
+
+    private static boolean abaixo(BigDecimal saldo, BigDecimal minimo) {
+        return minimo != null && (saldo == null ? BigDecimal.ZERO : saldo).compareTo(minimo) < 0;
     }
 
     public void adicionarCodigoBarras(String codigo, String tipo, boolean principal) {

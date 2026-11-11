@@ -16,6 +16,7 @@ import java.time.Instant;
 @Service
 public class AdminDashboardService {
     @Autowired private EmpresaRepository empresaRepository;
+    @Autowired private com.jefiro.app247.infra.repository.ProdutoRepository produtoRepository;
     @Autowired private AdminSalesQueryService salesService;
     @Autowired private AdminTerminalQueryService terminalService;
     @Autowired private AdminAlertQueryService alertService;
@@ -38,11 +39,19 @@ public class AdminDashboardService {
                 salesService.today(),
                 terminalService.summary(),
                 alertService.summary(),
-                AdminStockSummaryResponse.regraIndisponivel(),
+                estoque(empresaId),
                 paymentService.attention(),
                 onboardingService.status(),
                 activityService.recent(8)
         );
+    }
+
+    private AdminStockSummaryResponse estoque(String empresaId) {
+        if (produtoRepository.countComEstoqueMinimo(empresaId) == 0) {
+            return AdminStockSummaryResponse.regraIndisponivel();
+        }
+        return AdminStockSummaryResponse.abaixoDoMinimo(
+                produtoRepository.countAbaixoDoEstoqueMinimo(empresaId));
     }
 
     private String currentUserName() {

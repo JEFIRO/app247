@@ -1,5 +1,7 @@
 package com.jefiro.app247.infra.controller;
 
+import com.jefiro.app247.domain.model.dto.ProdutoDisponibilidadeRequest;
+import com.jefiro.app247.domain.model.dto.ProdutoResponse;
 import com.jefiro.app247.domain.model.dto.estoque.*;
 import com.jefiro.app247.infra.service.EstoqueService;
 import com.jefiro.app247.infra.service.TerminalRequestAuthorizationService;
@@ -36,6 +38,13 @@ public class EstoqueController {
     public ResponseEntity<?> remover(@PathVariable String condominioId, @PathVariable String produtoId) {
         return ResponseEntity.ok(service.remover(condominioId, produtoId));
     }
+    @PutMapping("/produtos/{produtoId}/disponibilidade-todos-condominios")
+    public ResponseEntity<?> disponivelEmTodos(@PathVariable String produtoId,
+                                               @RequestBody @Valid ProdutoDisponibilidadeRequest request) {
+        return ResponseEntity.ok(new ProdutoResponse(
+                service.definirDisponivelEmTodos(produtoId, request.ativo())));
+    }
+
     @GetMapping("/estoque/geral")
     public ResponseEntity<?> geral() { return ResponseEntity.ok(service.listarGeral()); }
 

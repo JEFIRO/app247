@@ -191,6 +191,29 @@ class ProdutoServiceTest {
                 .containsExactlyInAnyOrder("cond-a", "cond-b");
     }
 
+    @Test
+    void estoqueMinimoZeroLimpaEAusenteMantemOValorAtual() throws Exception {
+        Produto produto = new Produto(dto("789", BigDecimal.valueOf(7)));
+        produto.setIdProduto("produto-a");
+        produto.setEstoqueMinimoCentral(new BigDecimal("10.000"));
+        produto.setEstoqueMinimoCondominio(new BigDecimal("4.000"));
+        when(produtoRepository.findByIdProdutoAndEmpresaId("produto-a", "empresa-a"))
+                .thenReturn(Optional.of(produto));
+        when(estoqueRepository.findActiveCondominiumIdsByProductId("produto-a")).thenReturn(List.of());
+        when(produtoRepository.saveAndFlush(produto)).thenReturn(produto);
+
+        service.atualizar("produto-a", new CreateProductDTO(
+                "789", "Produto", BigDecimal.valueOf(7), null, "UN", "OUTROS", null, null,
+                null, null, "789", null, null, true, BigDecimal.ZERO, null), null);
+
+        org.assertj.core.api.Assertions.assertThat(produto.getEstoqueMinimoCentral()).isNull();
+        org.assertj.core.api.Assertions.assertThat(produto.getEstoqueMinimoCondominio())
+                .isEqualByComparingTo("4.000");
+        org.assertj.core.api.Assertions.assertThat(produto.centralAbaixoDoMinimo(BigDecimal.ZERO)).isFalse();
+        org.assertj.core.api.Assertions.assertThat(produto.condominioAbaixoDoMinimo(new BigDecimal("3.999"))).isTrue();
+        org.assertj.core.api.Assertions.assertThat(produto.condominioAbaixoDoMinimo(new BigDecimal("4.000"))).isFalse();
+    }
+
     private CreateProductDTO dto(String codigo, BigDecimal preco) {
         return new CreateProductDTO(codigo, "Produto", preco, null, "UN", "OUTROS",
                 "Descrição", null, BigDecimal.ONE, BigDecimal.ZERO);

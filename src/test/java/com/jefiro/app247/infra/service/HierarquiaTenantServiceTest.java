@@ -41,7 +41,8 @@ class HierarquiaTenantServiceTest {
         when(empresaService.getEmpresa("empresa-a")).thenReturn(empresa);
         when(condominioRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         CondominioService service = new CondominioService(
-                condominioRepository, empresaService, enderecoRepository);
+                condominioRepository, empresaService, enderecoRepository,
+                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
 
         service.criar(new CondominioRequest("Alpha", null, null));
         service.criar(new CondominioRequest("Beta", null, null));
@@ -72,7 +73,8 @@ class HierarquiaTenantServiceTest {
     void bloqueiaCondominioETerminalDeOutraEmpresaPelaConsultaComposta() {
         EmpresaContext.set("empresa-a");
         CondominioService condominios = new CondominioService(
-                condominioRepository, empresaService, enderecoRepository);
+                condominioRepository, empresaService, enderecoRepository,
+                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
         when(condominioRepository.findByIdCondominioAndEmpresaId("condominio-b", "empresa-a"))
                 .thenReturn(Optional.empty());
         assertThrows(ResponseStatusException.class, () -> condominios.buscar("condominio-b"));

@@ -74,7 +74,8 @@ class HierarquiaRepositoryTest {
         EmpresaService empresaService = mock(EmpresaService.class);
         when(empresaService.getEmpresa(empresa.getId())).thenReturn(empresa);
         CondominioService service = new CondominioService(
-                condominioRepository, empresaService, enderecoRepository);
+                condominioRepository, empresaService, enderecoRepository,
+                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
         EnderecoDTO endereco = new EnderecoDTO(
                 "Rua Persistida", "20", null, "Centro", "Salvador", "BA", "40000002");
 

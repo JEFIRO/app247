@@ -73,7 +73,7 @@ class DatabaseBaselineMySqlTest {
     @MockitoBean MercadoPagoCobrancaService mercadoPago;
 
     @Test
-    void baselineVaziaExecutaVinteETresMigrationsECriaQuarentaENoveTabelas() {
+    void baselineVaziaExecutaVinteESeisMigrationsECriaCinquentaEUmaTabelas() {
         Integer migrations = jdbc.queryForObject(
                 "select count(*) from flyway_schema_history where success = 1", Integer.class);
         Integer tables = jdbc.queryForObject("""
@@ -83,8 +83,8 @@ class DatabaseBaselineMySqlTest {
                    and table_name <> 'flyway_schema_history'
                 """, Integer.class);
 
-        assertThat(migrations).isEqualTo(23);
-        assertThat(tables).isEqualTo(49);
+        assertThat(migrations).isEqualTo(26);
+        assertThat(tables).isEqualTo(51);
     }
 
     @Test

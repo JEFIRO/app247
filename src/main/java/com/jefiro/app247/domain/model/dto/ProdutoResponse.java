@@ -22,6 +22,9 @@ public record ProdutoResponse(
         BigDecimal pesoTolerancia,
         String foto,
         boolean ativo,
+        boolean disponivelTodosCondominios,
+        BigDecimal estoqueMinimoCentral,
+        BigDecimal estoqueMinimoCondominio,
         ProdutoFiscalDTO fiscal,
         Instant createdAt,
         Instant updatedAt
@@ -32,6 +35,8 @@ public record ProdutoResponse(
                 produto.getNome(), produto.getDescricao(),
                 produto.getPreco(), produto.getUnidadeMedida(), produto.getCategoria(), produto.getPeso(),
                 produto.getPesoTolerancia(), produto.getFoto(), produto.isStatus(),
+                produto.isDisponivelTodosCondominios(),
+                produto.getEstoqueMinimoCentral(), produto.getEstoqueMinimoCondominio(),
                 produto.getFiscal() == null ? null : new ProdutoFiscalDTO(produto.getFiscal()), produto.getCreateAt(),
                 produto.getUpdateAt());
     }

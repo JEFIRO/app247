@@ -16,12 +16,16 @@ public record EstoqueEmpresaResponse(
         BigDecimal quantidade,
         boolean ativo,
         String localizacao,
-        BigDecimal capacidadePosicao
+        BigDecimal capacidadePosicao,
+        BigDecimal estoqueMinimo,
+        boolean abaixoDoMinimo
 ) {
     public EstoqueEmpresaResponse(EstoqueEmpresa estoque, String localizacao, BigDecimal capacidadePosicao) {
         this(estoque.getId(), estoque.getProduto().getIdProduto(), estoque.getProduto().getNome(),
                 estoque.getProduto().getCodigoInterno(), estoque.getProduto().getCodigo(),
                 estoque.getProduto().getCategoria(), estoque.getProduto().getUnidadeMedida().name(),
-                estoque.getQuantidade(), Boolean.TRUE.equals(estoque.getAtivo()), localizacao, capacidadePosicao);
+                estoque.getQuantidade(), Boolean.TRUE.equals(estoque.getAtivo()), localizacao, capacidadePosicao,
+                estoque.getProduto().getEstoqueMinimoCentral(),
+                estoque.getProduto().centralAbaixoDoMinimo(estoque.getQuantidade()));
     }
 }

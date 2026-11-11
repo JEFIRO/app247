@@ -5,8 +5,10 @@ import com.jefiro.app247.domain.model.Empresa;
 import com.jefiro.app247.domain.model.auth.Endereco;
 import com.jefiro.app247.domain.model.dto.CondominioRequest;
 import com.jefiro.app247.domain.model.dto.CondominioResponse;
+import com.jefiro.app247.infra.event.CondominioCriadoEvent;
 import com.jefiro.app247.infra.repository.CondominioRepository;
 import com.jefiro.app247.infra.repository.EnderecoRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,12 +22,15 @@ public class CondominioService {
     private final CondominioRepository repository;
     private final EmpresaService empresaService;
     private final EnderecoRepository enderecoRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public CondominioService(CondominioRepository repository, EmpresaService empresaService,
-                             EnderecoRepository enderecoRepository) {
+                             EnderecoRepository enderecoRepository,
+                             ApplicationEventPublisher eventPublisher) {
         this.repository = repository;
         this.empresaService = empresaService;
         this.enderecoRepository = enderecoRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -38,6 +43,12 @@ public class CondominioService {
     public List<CondominioResponse> listar() {
         return repository.findAllByEmpresaIdOrderByNome(EmpresaContext.require()).stream()
                 .map(CondominioResponse::new)
+                .toList();
+    }
+
+    public List<Condominio> listarAtivosDoTenant(String empresaId) {
+        return repository.findAllByEmpresaIdOrderByNome(empresaId).stream()
+                .filter(condominio -> Boolean.TRUE.equals(condominio.getAtivo()))
                 .toList();
     }
 
@@ -99,7 +110,9 @@ public class CondominioService {
         if (condominio.getEndereco() != null) {
             condominio.setEndereco(enderecoRepository.save(condominio.getEndereco()));
         }
-        return repository.save(condominio);
+        Condominio salvo = repository.save(condominio);
+        eventPublisher.publishEvent(new CondominioCriadoEvent(salvo));
+        return salvo;
     }
 
     private void copiarEndereco(CondominioRequest request, Endereco endereco) {

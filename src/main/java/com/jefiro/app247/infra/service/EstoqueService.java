@@ -6,6 +6,7 @@ import com.jefiro.app247.domain.model.dto.estoque.MovimentacaoEstoqueResponse;
 import com.jefiro.app247.domain.model.dto.ProdutoTerminalResponse;
 import com.jefiro.app247.domain.model.enum_type.TipoMovimentacaoEstoque;
 import com.jefiro.app247.domain.model.enum_type.ProdutoCatalogChangeReason;
+import com.jefiro.app247.infra.event.CondominioCriadoEvent;
 import com.jefiro.app247.infra.event.ProdutoCatalogChangedEvent;
 import com.jefiro.app247.infra.repository.EstoqueCondominioRepository;
 import com.jefiro.app247.infra.repository.MovimentacaoEstoqueRepository;
@@ -13,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -85,6 +87,52 @@ public class EstoqueService {
             publicarCatalogo(estoque, ProdutoCatalogChangeReason.PRODUCT_ASSIGNED_TO_CONDOMINIUM);
         }
         return new EstoqueResponse(estoque);
+    }
+
+    /**
+     * Marca (ou desmarca) o produto como disponível em todos os Condomínios. Ao marcar,
+     * associa o produto aos Condomínios ativos em que ele ainda não está; desmarcar
+     * mantém as associações existentes e só deixa de valer para Condomínios novos.
+     */
+    @Transactional
+    public Produto definirDisponivelEmTodos(String produtoId, boolean ativo) {
+        String empresaId = EmpresaContext.require();
+        Produto produto = produtoService.definirDisponivelEmTodosCondominios(produtoId, ativo);
+        if (ativo) {
+            condominioService.listarAtivosDoTenant(empresaId)
+                    .forEach(condominio -> associarSemSaldo(condominio, produto));
+        }
+        return produto;
+    }
+
+    /** Condomínio novo já nasce com os produtos marcados para todos os Condomínios. */
+    @EventListener
+    public void aoCriarCondominio(CondominioCriadoEvent event) {
+        Condominio condominio = event.condominio();
+        produtoService.disponiveisEmTodosCondominios(condominio.getEmpresa().getId())
+                .forEach(produto -> associarSemSaldo(condominio, produto));
+    }
+
+    private void associarSemSaldo(Condominio condominio, Produto produto) {
+        var existente = estoqueRepository.findByCondominioIdCondominioAndProdutoIdProduto(
+                condominio.getIdCondominio(), produto.getIdProduto());
+        if (existente.isPresent()) {
+            EstoqueCondominio estoque = existente.get();
+            if (Boolean.TRUE.equals(estoque.getAtivo())) return;
+            estoque.alterarDisponibilidade(true);
+            estoqueRepository.saveAndFlush(estoque);
+            publicarCatalogo(estoque, ProdutoCatalogChangeReason.PRODUCT_AVAILABILITY_CHANGED);
+            return;
+        }
+        EstoqueCondominio estoque = new EstoqueCondominio();
+        estoque.setCondominio(condominio);
+        estoque.setProduto(produto);
+        estoque.setQuantidade(BigDecimal.ZERO);
+        estoque.alterarDisponibilidade(true);
+        estoque = estoqueRepository.saveAndFlush(estoque);
+        movimentar(estoque, BigDecimal.ZERO, TipoMovimentacaoEstoque.ENTRADA,
+                null, null, "Disponível em todos os condomínios", null);
+        publicarCatalogo(estoque, ProdutoCatalogChangeReason.PRODUCT_ASSIGNED_TO_CONDOMINIUM);
     }
 
     @Transactional
