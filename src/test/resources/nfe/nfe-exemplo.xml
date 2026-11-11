@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- NF-e FICTÍCIA para demonstração e testes. Emitente e produtos inventados; não tem valor fiscal. -->
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+  <NFe>
+    <infNFe Id="NFe29261111222333000181550010000012341123456783" versao="4.00">
+      <ide>
+        <cUF>29</cUF><cNF>12345678</cNF><natOp>VENDA DE MERCADORIA</natOp><mod>55</mod><serie>1</serie>
+        <nNF>1234</nNF><dhEmi>2026-11-09T10:30:00-03:00</dhEmi><tpNF>1</tpNF><tpAmb>2</tpAmb>
+      </ide>
+      <emit>
+        <CNPJ>11222333000181</CNPJ><xNome>DISTRIBUIDORA EXEMPLO LTDA</xNome>
+        <enderEmit><xMun>FEIRA DE SANTANA</xMun><UF>BA</UF></enderEmit>
+      </emit>
+      <dest>
+        <CNPJ>24700000000162</CNPJ><xNome>EMPRESA TESTE LTDA</xNome>
+      </dest>
+      <det nItem="1">
+        <prod>
+          <cProd>REF350</cProd><cEAN>7890000000017</cEAN><xProd>REFRIGERANTE COLA LATA 350ML</xProd><NCM>22021000</NCM><CFOP>5102</CFOP>
+          <uCom>CX</uCom><qCom>2.0000</qCom><vUnCom>36.0000000000</vUnCom><vProd>72.00</vProd>
+          <cEANTrib>7890000000017</cEANTrib><uTrib>CX</uTrib><qTrib>2.0000</qTrib><vUnTrib>36.0000000000</vUnTrib><indTot>1</indTot>
+        </prod>
+        <imposto><ICMS><ICMSSN102><orig>0</orig><CSOSN>102</CSOSN></ICMSSN102></ICMS></imposto>
+      </det>
+      <det nItem="2">
+        <prod>
+          <cProd>AGU500</cProd><cEAN>7890000000024</cEAN><xProd>AGUA MINERAL SEM GAS 500ML</xProd><NCM>22011000</NCM><CFOP>5102</CFOP>
+          <uCom>UN</uCom><qCom>24.0000</qCom><vUnCom>1.2000000000</vUnCom><vProd>28.80</vProd>
+          <cEANTrib>7890000000024</cEANTrib><uTrib>UN</uTrib><qTrib>24.0000</qTrib><vUnTrib>1.2000000000</vUnTrib><indTot>1</indTot>
+        </prod>
+        <imposto><ICMS><ICMSSN102><orig>0</orig><CSOSN>102</CSOSN></ICMSSN102></ICMS></imposto>
+      </det>
+      <det nItem="3">
+        <prod>
+          <cProd>BISC130</cProd><cEAN>7890000000031</cEAN><xProd>BISCOITO RECHEADO CHOCOLATE 130G</xProd><NCM>19053100</NCM><CFOP>5102</CFOP>
+          <uCom>UN</uCom><qCom>30.0000</qCom><vUnCom>2.1000000000</vUnCom><vProd>63.00</vProd>
+          <cEANTrib>7890000000031</cEANTrib><uTrib>UN</uTrib><qTrib>30.0000</qTrib><vUnTrib>2.1000000000</vUnTrib><indTot>1</indTot>
+        </prod>
+        <imposto><ICMS><ICMSSN102><orig>0</orig><CSOSN>102</CSOSN></ICMSSN102></ICMS></imposto>
+      </det>
+      <det nItem="4">
+        <prod>
+          <cProd>PQJ1KG</cProd><cEAN>SEM GTIN</cEAN><xProd>PAO DE QUEIJO CONGELADO 1KG</xProd><NCM>19059090</NCM><CFOP>5102</CFOP>
+          <uCom>UN</uCom><qCom>10.0000</qCom><vUnCom>8.5000000000</vUnCom><vProd>85.00</vProd>
+          <cEANTrib>SEM GTIN</cEANTrib><uTrib>UN</uTrib><qTrib>10.0000</qTrib><vUnTrib>8.5000000000</vUnTrib><indTot>1</indTot>
+        </prod>
+        <imposto><ICMS><ICMSSN102><orig>0</orig><CSOSN>102</CSOSN></ICMSSN102></ICMS></imposto>
+      </det>
+      <total><ICMSTot><vProd>248.80</vProd><vNF>248.80</vNF></ICMSTot></total>
+    </infNFe>
+  </NFe>
+  <protNFe versao="4.00">
+    <infProt><tpAmb>2</tpAmb><chNFe>29261111222333000181550010000012341123456783</chNFe><cStat>100</cStat><xMotivo>Autorizado o uso da NF-e</xMotivo></infProt>
+  </protNFe>
+</nfeProc>
